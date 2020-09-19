@@ -16,8 +16,8 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
   public configuration: Configuration = {devices:[], apiPort:23, host:'127.0.0.1', username:'', password:''};
   private readonly net = require('net');
   public readonly processor = new this.net.Socket();
-  private comReady = false;
-  private retryInterval;  
+  private processorIsReady = false;
+  private retryInterval;   //Holds the retryInterval in case of disconnect 
   
   // this is used to track restored cached accessories
   public readonly accessories: PlatformAccessory[] = [];
@@ -33,10 +33,12 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
 
 
 
-    this.log.debug('Finished initializing:', this.config.name);    
+    this.log.debug('Initialization Complete');
     this.connectToProcessor(this);
 
+    //SOCKET EVENTS
     this.processor.on('data', (data) => {
+      // *************** DATA ANALISIS
       const datarx = data.toString();
       // this.log.debug('>>>> ' + datarx);
 
@@ -54,52 +56,51 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
       }
 
       if (datarx.includes('~MONITORING,5,1')) {                
-        this.log.debug('Session Established.');        
-        this.comReady = true;
+        this.log.debug('Monitoring Zones Aknowledged by Server');
+        this.log.info('Connected to HW Processor [' + this.configuration.host + ']');
+        this.processorIsReady = true;
         return;
       }
 
       if (datarx.includes('QNET>')) {
-        if (this.comReady === false) {
+        if (this.processorIsReady === false) {
+          this.log.debug('Session Ready');
+          this.log.debug('Requesting #Monitoring Zones');
           this.processor.write('#MONITORING,5,1' + '\r\n');          
           return;
         }
-                
       }
+      // *************** DATA ANALISIS
     });
-
     // this.processor.on('error', (err) => {      
     //   this.log.debug('Connection Error: ', err);      
     // });
 
     this.processor.on('close', () => {
-      this.comReady = false;
-      this.log.debug('Processor closed Connection...');      
+      this.processorIsReady = false;
+      this.log.error('Processor closed Connection...');      
       if (this.retryInterval === null) {
         this.log.debug('Scheduling Reconnect');
-        this.retryInterval = setInterval(this.connectToProcessorTask, 5000, this);
+        this.retryInterval = setInterval(this.connectToProcessor, 5000, this);
       }
     });
+    //***************  SOCKET EVENTS
 
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
     // Dynamic Platform plugins should only register new accessories after this event was fired,
     // in order to ensure they weren't added to homebridge already. This event can also be used
     // to start discovery of new accessories.
     this.api.on('didFinishLaunching', () => {
-      log.debug('Executed didFinishLaunching callback');
-       
-      // run the method to discover / register your devices as accessories
+      log.debug('Loading Devices...');             
       this.discoverDevices();
     });
   }
 
-  connectToProcessorTask(self) {
-    self.connectToProcessor(self);
-  }
+
 
   connectToProcessor(self) {
-    this.log.debug('Connecting to:', self.configuration.host);
-    if (self.comReady === false) {
+    this.log.info('Connecting to:', self.configuration.host);
+    if (self.processorIsReady === false) {
       self.log.debug('Connecting to processor...');
       self.processor.connect(self.configuration.apiPort, self.configuration.host, () => {
         self.log.debug('Processor Connected');
@@ -107,7 +108,6 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
         self.retryInterval = null;        
       });
     }
-    
   }
 
   /**
@@ -115,7 +115,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
    * It should be used to setup event handlers for characteristics and update respective values.
    */
   configureAccessory(accessory: PlatformAccessory) {
-    this.log.info('Loading accessory from cache:', accessory.displayName);
+    this.log.debug('** Loading: ', accessory.displayName);
 
     // add the restored accessory to the accessories cache so we can track if it has already been registered
     this.accessories.push(accessory);
@@ -143,7 +143,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
 
       if (existingAccessory) {
         // the accessory already exists
-        this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
+        this.log.info('~ Restoring:', existingAccessory.displayName);
 
         // if you need to update the accessory.context then you should run `api.updatePlatformAccessories`. eg.:
         // existingAccessory.context.device = device;
@@ -155,7 +155,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
 
       } else {
         // the accessory does not yet exist, so we need to create it
-        this.log.info('Creating new accessory:', device.name);
+        this.log.info('+ Creating:', device.name);
 
         // create a new accessory
         const accessory = new this.api.platformAccessory(device.name, uuid);

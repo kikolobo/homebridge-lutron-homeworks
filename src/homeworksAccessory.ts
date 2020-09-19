@@ -13,9 +13,9 @@ export class HomeworksAccesory {
    * These are just used to create a working example
    * You should implement your own code to track the state of your accessory
    */
-  private exampleStates = {
+  private dimmerState = {
     On: false,
-    Brightness: 100,
+    Brightness: 0,
   }
 
   constructor(
@@ -47,8 +47,8 @@ export class HomeworksAccesory {
 
     // register handlers for the Brightness Characteristic
     this.service.getCharacteristic(this.platform.Characteristic.Brightness)
-      .on('set', this.setBrightness.bind(this));       // SET - bind to the 'setBrightness` method below
-   
+      .on('set', this.setBrightness.bind(this))       // SET - bind to the 'setBrightness` method below
+      .on('get', this.getBrightness.bind(this));       // GET - bind to the 'getBrightness` method below
   }
 
   /**
@@ -58,7 +58,8 @@ export class HomeworksAccesory {
   setOn(value: CharacteristicValue, callback: CharacteristicSetCallback) {
 
     // implement your own code to turn your device on/off
-    this.exampleStates.On = value as boolean;
+    this.dimmerState.On = value as boolean;
+    this.dimmerState.Brightness = 100;
 
     this.platform.log.debug('Set Characteristic On ->', value);
 
@@ -82,7 +83,7 @@ export class HomeworksAccesory {
   getOn(callback: CharacteristicGetCallback) {
 
     // implement your own code to check if the device is on
-    const isOn = this.exampleStates.On;
+    const isOn = this.dimmerState.On;
 
     this.platform.log.debug('Get Characteristic On ->', isOn);
 
@@ -97,14 +98,32 @@ export class HomeworksAccesory {
    * These are sent when the user changes the state of an accessory, for example, changing the Brightness
    */
   setBrightness(value: CharacteristicValue, callback: CharacteristicSetCallback) {
-
+    const brightnessVal = value as number;
     // implement your own code to set the brightness
-    this.exampleStates.Brightness = value as number;
+    this.dimmerState.Brightness = brightnessVal;
+    if (brightnessVal > 0) {
+      this.dimmerState.On = true; 
+    } else {
+      this.dimmerState.On = false; 
+    }
 
     this.platform.log.debug('Set Characteristic Brightness -> ', value);
 
     // you must call the callback function
     callback(null);
+  }
+
+  getBrightness(callback: CharacteristicGetCallback) {
+
+    // implement your own code to check if the device is on
+    const brightness = this.dimmerState.Brightness;
+
+    this.platform.log.debug('Get Characteristic Brightness ->', brightness);
+
+    // you must call the callback function
+    // the first argument should be null if there were no errors
+    // the second argument should be the value to return
+    callback(null, brightness);
   }
 
 }
