@@ -1,17 +1,24 @@
 import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge';
-
+import { Device } from './Schemas/device';
+import { Configuration } from './Schemas/configuration';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
-import { ExamplePlatformAccessory } from './platformAccessory';
+import { HomeworksAccesory } from './homeworksAccessory';
 
 /**
  * HomebridgePlatform
  * This class is the main constructor for your plugin, this is where you should
  * parse the user config and discover/register accessories with Homebridge.
  */
-export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
+export class HomeworksPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
   public readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic;
-
+  public readonly devices: Device[] = [];
+  public configuration: Configuration = {devices:[], apiPort:23, host:'127.0.0.1', username:'', password:''};
+  private readonly net = require('net');
+  public readonly processor = new this.net.Socket();
+  private comReady = false;
+  private retryInterval;  
+  
   // this is used to track restored cached accessories
   public readonly accessories: PlatformAccessory[] = [];
 
@@ -20,7 +27,59 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
     public readonly config: PlatformConfig,
     public readonly api: API,
   ) {
-    this.log.debug('Finished initializing platform:', this.config.name);
+
+    const obj = JSON.parse(JSON.stringify(this.config));
+    this.configuration = obj;  
+
+
+
+    this.log.debug('Finished initializing:', this.config.name);    
+    this.connectToProcessor(this);
+
+    this.processor.on('data', (data) => {
+      const datarx = data.toString();
+      // this.log.debug('>>>> ' + datarx);
+
+      
+      if (datarx.includes('login:')) {
+        this.log.debug('Establishing Session...');
+        this.processor.write(this.configuration.username + '\r\n');
+        return;
+      }
+
+      if (datarx.includes('password:')) {
+        this.log.debug('Authenticating...');
+        this.processor.write(this.configuration.password + '\r\n');
+        return;
+      }
+
+      if (datarx.includes('~MONITORING,5,1')) {                
+        this.log.debug('Session Established.');        
+        this.comReady = true;
+        return;
+      }
+
+      if (datarx.includes('QNET>')) {
+        if (this.comReady === false) {
+          this.processor.write('#MONITORING,5,1' + '\r\n');          
+          return;
+        }
+                
+      }
+    });
+
+    // this.processor.on('error', (err) => {      
+    //   this.log.debug('Connection Error: ', err);      
+    // });
+
+    this.processor.on('close', () => {
+      this.comReady = false;
+      this.log.debug('Processor closed Connection...');      
+      if (this.retryInterval === null) {
+        this.log.debug('Scheduling Reconnect');
+        this.retryInterval = setInterval(this.connectToProcessorTask, 5000, this);
+      }
+    });
 
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
     // Dynamic Platform plugins should only register new accessories after this event was fired,
@@ -28,9 +87,27 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
     // to start discovery of new accessories.
     this.api.on('didFinishLaunching', () => {
       log.debug('Executed didFinishLaunching callback');
+       
       // run the method to discover / register your devices as accessories
       this.discoverDevices();
     });
+  }
+
+  connectToProcessorTask(self) {
+    self.connectToProcessor(self);
+  }
+
+  connectToProcessor(self) {
+    this.log.debug('Connecting to:', self.configuration.host);
+    if (self.comReady === false) {
+      self.log.debug('Connecting to processor...');
+      self.processor.connect(self.configuration.apiPort, self.configuration.host, () => {
+        self.log.debug('Processor Connected');
+        clearInterval(self.retryInterval);
+        self.retryInterval = null;        
+      });
+    }
+    
   }
 
   /**
@@ -51,27 +128,14 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
    */
   discoverDevices() {
 
-    // EXAMPLE ONLY
-    // A real plugin you would discover accessories from the local network, cloud services
-    // or a user-defined array in the platform config.
-    const exampleDevices = [
-      {
-        exampleUniqueId: 'ABCD',
-        exampleDisplayName: 'Bedroom',
-      },
-      {
-        exampleUniqueId: 'EFGH',
-        exampleDisplayName: 'Kitchen',
-      },
-    ];
+    for (const device of this.configuration.devices) {
+      this.devices.push(device);      
+    }
+      
 
     // loop over the discovered devices and register each one if it has not already been registered
-    for (const device of exampleDevices) {
-
-      // generate a unique id for the accessory this should be generated from
-      // something globally unique, but constant, for example, the device serial
-      // number or MAC address
-      const uuid = this.api.hap.uuid.generate(device.exampleUniqueId);
+    for (const device of this.configuration.devices) {      
+      const uuid = this.api.hap.uuid.generate(device.integrationID);
 
       // see if an accessory with the same uuid has already been registered and restored from
       // the cached devices we stored in the `configureAccessory` method above
@@ -87,14 +151,14 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
 
         // create the accessory handler for the restored accessory
         // this is imported from `platformAccessory.ts`
-        new ExamplePlatformAccessory(this, existingAccessory);
+        new HomeworksAccesory(this, existingAccessory);
 
       } else {
         // the accessory does not yet exist, so we need to create it
-        this.log.info('Adding new accessory:', device.exampleDisplayName);
+        this.log.info('Creating new accessory:', device.name);
 
         // create a new accessory
-        const accessory = new this.api.platformAccessory(device.exampleDisplayName, uuid);
+        const accessory = new this.api.platformAccessory(device.name, uuid);
 
         // store a copy of the device object in the `accessory.context`
         // the `context` property can be used to store any data about the accessory you may need
@@ -102,7 +166,7 @@ export class ExampleHomebridgePlatform implements DynamicPlatformPlugin {
 
         // create the accessory handler for the newly create accessory
         // this is imported from `platformAccessory.ts`
-        new ExamplePlatformAccessory(this, accessory);
+        new HomeworksAccesory(this, accessory);
 
         // link the accessory to your platform
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);

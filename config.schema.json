@@ -1,15 +1,56 @@
 {
-  "pluginAlias": "ExampleHomebridgePlugin",
+  "pluginAlias": "Homeworks",
   "pluginType": "platform",
-  "singular": true,
+  "headerDisplay": "Processor and Load Options",
+  "footerDisplay": "Please verify your integrationIDs in your database XML file",
+  "singular": false,
   "schema": {
     "type": "object",
-    "properties": {
-      "name": {
-        "title": "Name",
+    "properties": {     
+      "host": {
+        "title": "Homeworks Telnet IP Address",
         "type": "string",
-        "required": true,
-        "default": "Example Dynamic Platform"
+        "format": "ipv4"
+      }, 
+        "apiPort": {
+        "type": "integer",
+        "title": "Port",
+        "placeholder": "23",
+        "description": "Processor Port No."
+      },
+      "username": {
+        "title": "Username",
+        "type": "string"
+      },
+      "password": {
+        "title": "Password",
+        "type": "string"
+      },  
+      "devices": {
+        "type": "array",
+        "title": "Lights",
+        "description": "Light Directory",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "title": "Light Name",
+              "required": true,
+              "placeholder": "Livingroom"
+            },
+            "integrationID": {
+              "type": "string",
+              "title": "Integration ID No.",
+              "required": true,
+              "placeholder": "70"
+            },
+            "isDimmable": {
+              "type": "boolean",
+              "title": "Is it Dimmable"
+            }            
+          }
+        }
       }
     }
   }
