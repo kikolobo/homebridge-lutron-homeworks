@@ -1,7 +1,7 @@
 /**
  * Represents a load/device from the homeworks processor.
  */
-export interface Device {
+export interface ConfigDevice {
 
     /**
      * Gets or sets a unique name for the device that will also be used in the API.

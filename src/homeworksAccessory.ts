@@ -1,5 +1,6 @@
 import { Service, PlatformAccessory, CharacteristicValue, CharacteristicSetCallback, CharacteristicGetCallback } from 'homebridge';
 import { HomeworksPlatform } from './platform';
+interface SendBrightnessCommand { (value: number, accesory:HomeworksAccesory): void }
 
 /**
  * Platform Accessory
@@ -8,19 +9,25 @@ import { HomeworksPlatform } from './platform';
  */
 export class HomeworksAccesory {
   private service: Service;
+  public brightnessToProcessorCallback? : SendBrightnessCommand;
 
-  /**
-   * These are just used to create a working example
-   * You should implement your own code to track the state of your accessory
-   */
-  private dimmerState = {
+  public dimmerState = {
     On: false,
     Brightness: 0,
   }
 
+  public name;
+  public _integrationId;
+  public UUID;
+  
+
+  
+
   constructor(
     private readonly platform: HomeworksPlatform,
     private readonly accessory: PlatformAccessory,
+    private readonly uuid: string,
+    private readonly integrationId: string,
   ) {
 
     // set accessory information
@@ -35,7 +42,10 @@ export class HomeworksAccesory {
 
     // set the service name, this is what is displayed as the default name on the Home app
     // in this example we are using the name we stored in the `accessory.context` in the `discoverDevices` method.
-    this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.exampleDisplayName);
+    this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.name);
+    this.name = accessory.context.device.name;
+    this.UUID = uuid;
+    this._integrationId = integrationId;
 
     // each service must implement at-minimum the "required characteristics" for the given service type
     // see https://developers.homebridge.io/#/service/Lightbulb
@@ -55,16 +65,48 @@ export class HomeworksAccesory {
    * Handle "SET" requests from HomeKit
    * These are sent when the user changes the state of an accessory, for example, turning on a Light bulb.
    */
-  setOn(value: CharacteristicValue, callback: CharacteristicSetCallback) {
+  private setOn(value: CharacteristicValue, callback: CharacteristicSetCallback) {
 
     // implement your own code to turn your device on/off
     this.dimmerState.On = value as boolean;
-    this.dimmerState.Brightness = 100;
+    
+    if (value) {
+      this.dimmerState.Brightness = 100; 
+      if (this.brightnessToProcessorCallback) {
+        this.brightnessToProcessorCallback(100, this);
+      }
+    } else {
+      this.dimmerState.Brightness = 0; 
+      if (this.brightnessToProcessorCallback) {
+        this.brightnessToProcessorCallback(0, this);
+      }
+    }
+  
 
-    this.platform.log.debug('Set Characteristic On ->', value);
+    this.platform.log.debug('Set Characteristic isOn -> %b %s', this.dimmerState.On, this.name);
 
     // you must call the callback function
     callback(null);
+  }
+
+
+  public updateBrightness(brightnessVal) {
+    this.platform.log.debug('Update Characteristic Brightness -> %i %s', brightnessVal, this.name);
+    this.dimmerState.Brightness = brightnessVal;    
+    if (brightnessVal > 0) {
+      this.dimmerState.On = true; 
+    } else {
+      this.dimmerState.On = false;       
+    }
+
+    
+    if (this.dimmerState.On === true) {
+      this.service.updateCharacteristic(this.platform.Characteristic.On, true);
+    } else {
+      this.service.updateCharacteristic(this.platform.Characteristic.On, false);
+    }
+    this.service.updateCharacteristic(this.platform.Characteristic.Brightness, brightnessVal);
+  
   }
 
   /**
@@ -80,12 +122,16 @@ export class HomeworksAccesory {
    * @example
    * this.service.updateCharacteristic(this.platform.Characteristic.On, true)
    */
-  getOn(callback: CharacteristicGetCallback) {
+  private getOn(callback: CharacteristicGetCallback) {
 
     // implement your own code to check if the device is on
     const isOn = this.dimmerState.On;
 
-    this.platform.log.debug('Get Characteristic On ->', isOn);
+    if (isOn) {
+      this.platform.log.debug('Get Characteristic isOn -> ON %s', this.name);      
+    } else {
+      this.platform.log.debug('Get Characteristic isOn -> OFF %s', this.name);      
+    }
 
     // you must call the callback function
     // the first argument should be null if there were no errors
@@ -97,28 +143,31 @@ export class HomeworksAccesory {
    * Handle "SET" requests from HomeKit
    * These are sent when the user changes the state of an accessory, for example, changing the Brightness
    */
-  setBrightness(value: CharacteristicValue, callback: CharacteristicSetCallback) {
+  private setBrightness(value: CharacteristicValue, callback: CharacteristicSetCallback) {
     const brightnessVal = value as number;
+    this.platform.log.debug('Set Characteristic Brightness -> %i %s', value, this.name);
     // implement your own code to set the brightness
     this.dimmerState.Brightness = brightnessVal;
     if (brightnessVal > 0) {
       this.dimmerState.On = true; 
     } else {
       this.dimmerState.On = false; 
+    }    
+
+    if (this.brightnessToProcessorCallback) {
+      this.brightnessToProcessorCallback(brightnessVal, this);
     }
-
-    this.platform.log.debug('Set Characteristic Brightness -> ', value);
-
+    
     // you must call the callback function
     callback(null);
   }
 
-  getBrightness(callback: CharacteristicGetCallback) {
+  private getBrightness(callback: CharacteristicGetCallback) {
 
     // implement your own code to check if the device is on
     const brightness = this.dimmerState.Brightness;
 
-    this.platform.log.debug('Get Characteristic Brightness ->', brightness);
+    this.platform.log.debug('Get Characteristic Brightness -> %i %s', brightness, this.name);
 
     // you must call the callback function
     // the first argument should be null if there were no errors
