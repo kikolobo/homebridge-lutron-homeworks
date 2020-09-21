@@ -1,32 +1,30 @@
 import { Logger } from 'homebridge';
 
+interface DidReceiveCallback { (engine:NetworkEngine, message: string): void }
+interface DidConnectCallback { (engine:NetworkEngine): void }
+
+
 enum ComState {
     Boot,
     Connecting,
-    Establishing,
+    Authenticating,
     Connected,
+    Establishing,
+    Ready,
     Disconnected
 }
 
-// enum NetEvent {
-//     DidConnect,
-//     DidDisconnect,
-//     DidReceive,
-//     DeviceUpdate,    
-// }
-
-interface DidConnectCallback { (engine:NetworkEngine): void }
-interface DidReceiveCallback { (engine:NetworkEngine, message: string): void }
 
 
 export class NetworkEngine {
     private readonly net = require('net');
     private readonly socket = new this.net.Socket();
-    private status: ComState = ComState.Boot;
-    private crlf = '\r\n';
-    private didReceiveCallback? : DidReceiveCallback;
-    private didConnectCallback? : DidConnectCallback;
+    private status: ComState = ComState.Boot;    
+    private crlf = '\r\n';     
     
+    private didReceiveCallbacks: DidReceiveCallback[] = [];
+    private didConnectCallbacks: DidConnectCallback[] = [];
+
     constructor(
         public readonly log: Logger,
         private host: string,
@@ -41,58 +39,28 @@ export class NetworkEngine {
 
     connect() {
       this.log.info('[Network] Connecting to:', this.host);
+      
       if (this.status === ComState.Boot) {
         this.status = ComState.Connecting;
         this.log.debug('[Network] Connecting to socket...');
         this.socket.connect(this.port, this.host, () => {        
-          this.log.debug('[Network] socket Connected'); 
-          this.status = ComState.Establishing;                
+          this.log.debug('[Network] socket Connected');  
+          this.status = ComState.Connected;         
         });
       } else {
-        this.log.error('[Network] Cant connect, socket in invalid state');
+        this.log.error('[Network] Can`t connect, socket in invalid state');
       }
     }
 
     send(message:string) {
-      if (this.status !== ComState.Connected) {
-        this.log.debug('[Network] Socket not ready. Request to send ignored.');
+      if (this.status !== ComState.Ready) {
+        this.log.error('[Network] Socket not ready. Request to send ignored.');
         return; 
       }
 
       this.socket.write(message + this.crlf);
     }
     
-    
-    // CALLBACKS <<<<<<<<<<<<<<<<<<<<<<<<<<<<
-    private didConnect() {
-      this.log.error('[CB] DidConnect');
-      if (this.didConnectCallback) {
-        this.didConnectCallback(this); 
-      }
-      // this.socket.write('#MONITORING,5,1' + this.crlf); // Send Monitoring Query        
-    }
-
-    private didReceiveMessage(message:string) {
-      this.log.error('[CB] DidRX:', message);
-      if (this.didReceiveCallback) {
-        this.didReceiveCallback(this, message); 
-      }
-      // if (stringData.includes('~MONITORING,5,1')) {                
-      //   this.log.debug('[Network] Monitoring Zones Aknowledged by Server');
-      //   this.log.info('Connected to HW socket [' + this.host + ']');          
-      //    return;
-      //   //   for (const accesory of this.homeworksAccesories) {
-      //   //     this.log.debug('[Network] Requesting updates for:', accesory.name);
-      //   //     const command = `?OUTPUT,${accesory._integrationId},1`;
-      //   //     this.socket.write(command + this.crlf);
-      //   //   }
-
-          
-      //   return;
-      // }
-    }
-
-
 
 
     // Setup Helpers <<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -115,32 +83,66 @@ export class NetworkEngine {
 
     private setupSocketListeners() {
       this.socket.on('data', (data) => {      
-        const stringData = data.toString();        
-
+        const stringData = data.toString();                       
       
         if (stringData.includes('login:')) {
-          this.log.debug('[Network] Establishing Session...');
+          this.status = ComState.Authenticating;
+          this.log.debug('[Network] Authenticating Step 1...');
           this.socket.write(this.username + this.crlf);
           return;
         }
 
         if (stringData.includes('password:')) {
-          this.log.debug('[Network] Authenticating...');
+          this.status = ComState.Authenticating;
+          this.log.debug('[Network] Authenticating Step 2...');
           this.socket.write(this.password + this.crlf);
           return;
         }
          
-        if (stringData.includes('QNET>')) { // Prompt
-          if (this.status !== ComState.Connected) {
-            this.status = ComState.Connected;
-            this.didConnect();                
+        if (stringData.includes('QNET>')) { // Prompt          
+          if (this.status === ComState.Authenticating) {
+            this.status = ComState.Establishing;
+            this.log.debug('[Network] Requesting Monitoring Query');
+            this.socket.write('#MONITORING,5,1' + this.crlf); // Send Monitoring Query            
+          } 
+          return;
+        }
+
+        if (stringData.includes('~MONITORING,5,1')) {          
+          if (this.status === ComState.Establishing) {
+            this.status = ComState.Ready;
+            this.log.debug('[Network] Monitoring Query Acknowledged');
+            this.fireDidConnectCallbacks();            
           }
           return;
         }
 
+        this.fireDidReceiveCallbacks(stringData);             
         
-
-        this.didReceiveMessage(stringData);       
       });
+    }
+
+
+    // Callback Helpers <<<<<<<<<<<<<<<<<<<<<<<<<<<<
+    public registerReceiveCallback(callback:DidReceiveCallback) {
+      this.didReceiveCallbacks.push(callback);    
+      this.log.debug('[Network] DidReceiveCallback Registered.');  
+    }
+
+    public registerDidConnectCallback(callback:DidConnectCallback) {
+      this.didConnectCallbacks.push(callback);    
+      this.log.debug('[Network] DidConnectCallback Registered.');  
+    }
+
+    public fireDidReceiveCallbacks(message:string) {
+      for (const callback of this.didReceiveCallbacks) {        
+        callback(this, message);
+      }
+    }
+
+    public fireDidConnectCallbacks() {
+      for (const callback of this.didConnectCallbacks) {        
+        callback(this);
+      }
     }
 }
