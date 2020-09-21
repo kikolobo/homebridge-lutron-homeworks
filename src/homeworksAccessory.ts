@@ -9,7 +9,7 @@ interface SendBrightnessCommand { (value: number, accesory:HomeworksAccesory): v
  */
 export class HomeworksAccesory {
   private service: Service;
-  public brightnessToProcessorCallback? : SendBrightnessCommand;
+  public homekitBrightnessUpdate? : SendBrightnessCommand;
 
   public dimmerState = {
     On: false,
@@ -72,13 +72,13 @@ export class HomeworksAccesory {
     
     if (value) {
       this.dimmerState.Brightness = 100; 
-      if (this.brightnessToProcessorCallback) {
-        this.brightnessToProcessorCallback(100, this);
+      if (this.homekitBrightnessUpdate) {
+        this.homekitBrightnessUpdate(100, this);
       }
     } else {
       this.dimmerState.Brightness = 0; 
-      if (this.brightnessToProcessorCallback) {
-        this.brightnessToProcessorCallback(0, this);
+      if (this.homekitBrightnessUpdate) {
+        this.homekitBrightnessUpdate(0, this);
       }
     }
   
@@ -154,8 +154,8 @@ export class HomeworksAccesory {
       this.dimmerState.On = false; 
     }    
 
-    if (this.brightnessToProcessorCallback) {
-      this.brightnessToProcessorCallback(brightnessVal, this);
+    if (this.homekitBrightnessUpdate) {
+      this.homekitBrightnessUpdate(brightnessVal, this);
     }
     
     // you must call the callback function

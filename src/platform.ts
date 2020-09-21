@@ -33,6 +33,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
     
     this.api.on('didFinishLaunching', () => {      
       this.discoverDevices();
+      this.engine.connect();
     });
   }
 
@@ -77,8 +78,6 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
 
     engine.registerReceiveCallback(rxCallback);
     engine.registerDidConnectCallback(connectedCallback);
-    
-    engine.connect();
   }
 
   
@@ -100,68 +99,54 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
    * must not be registered again to prevent "duplicate UUID" errors.
    */
   discoverDevices() {
-    // loop over the discovered devices and register each one if it has not already been registered
-    for (const device of this.configuration.devices) {      
-      const uuid = this.api.hap.uuid.generate(device.integrationID);
+    
 
-      // see if an accessory with the same uuid has already been registered and restored from
-      // the cached devices we stored in the `configureAccessory` method above
-      const existingAccessory = this.cachedPlatformAccessories.find(accessory => accessory.UUID === uuid);
+    // this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, this.cachedPlatformAccessories);
 
-      if (existingAccessory) {
-        // the accessory already exists
-        this.log.info('~ Restoring:', existingAccessory.displayName);
+    for (const confDevice of this.configuration.devices) {      
+      const uuid = this.api.hap.uuid.generate(confDevice.integrationID);
+    
 
-        // if you need to update the accessory.context then you should run `api.updatePlatformAccessories`. eg.:
-        // existingAccessory.context.device = device;
-        // this.api.updatePlatformAccessories([existingAccessory]);
+      let loadedAccesory = this.cachedPlatformAccessories.find(accessory => accessory.UUID === uuid);            
+      
+      if (loadedAccesory === undefined || loadedAccesory === null) {
+        this.log.info('+ Creating:', confDevice.name);
+        const accessory = new this.api.platformAccessory(confDevice.name, uuid);
+        accessory.context.device = confDevice;
+        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+        loadedAccesory = accessory;
+      } 
 
-        // create the accessory handler for the restored accessory
-        // this is imported from `platformAccessory.ts`        
-        const hwa = new HomeworksAccesory(this, existingAccessory, existingAccessory.UUID, device.integrationID);
-        hwa.brightnessToProcessorCallback = (value: number, accesory:HomeworksAccesory) : void => {          
+      loadedAccesory.context.device = confDevice;
+      loadedAccesory.displayName = confDevice.name;
+      
+            
+      this.api.updatePlatformAccessories([loadedAccesory]);
+      
+
+      if (loadedAccesory) {
+        this.log.info('~ Registering: %s as %s', loadedAccesory.displayName, confDevice.name);        
+        const hwa = new HomeworksAccesory(this, loadedAccesory, loadedAccesory.UUID, confDevice.integrationID);
+        
+        // >>>Setup Callback to HomeworksAccesory
+        hwa.homekitBrightnessUpdate = (value: number, accesory:HomeworksAccesory) : void => {          
           const command = `#OUTPUT,${accesory._integrationId},1,${value},00:01`;
-
           this.log.info('Updating fixture state to: %s %s', value, accesory.name);
           this.engine.send(command);          
         };
-        
-        // obj.refreshConnection(() => { console.log('It works!'); });
+               
 
         this.homeworksAccesories.push(hwa);
             
 
       } else {
-        // the accessory does not yet exist, so we need to create it
-        this.log.info('+ Creating:', device.name);
-
-        // create a new accessory
-        const accessory = new this.api.platformAccessory(device.name, uuid);
-
-        // store a copy of the device object in the `accessory.context`
-        // the `context` property can be used to store any data about the accessory you may need
-        accessory.context.device = device;
-
-        // create the accessory handler for the newly create accessory
-        // this is imported from `platformAccessory.ts`
-        const hwa = new HomeworksAccesory(this, accessory, accessory.UUID, device.integrationID);
-        hwa.brightnessToProcessorCallback = (value: number, accesory:HomeworksAccesory) : void => {          
-          const command = `#OUTPUT,${accesory._integrationId},1,${value},00:01`;
-
-          this.log.info('Updating fixture state to: %s %s', value, accesory.name);
-          this.engine.send(command);          
-        };
-
-
-        this.homeworksAccesories.push(hwa);
-
-        // link the accessory to your platform
-        this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+        this.log.error('[platform] Unable to load accesory. [Error]');
       }
-
-      // it is possible to remove platform accessories at any time using `api.unregisterPlatformAccessories`, eg.:
-      // this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
     }
+    // if (accesoriesToUpdate.length > 0) {
+    //   this.log.warn('[platform] Updating %i accesories.', accesoriesToUpdate.length);
+    //   this.api.updatePlatformAccessories(accesoriesToUpdate);      
+    // }
 
   }
 }
