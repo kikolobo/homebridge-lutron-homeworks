@@ -18,7 +18,6 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
     public readonly config: PlatformConfig,
     public readonly api: API,
   ) {
-
     this.loadUserConfiguration();
 
     this.engine = new NetworkEngine(
@@ -33,7 +32,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
     
     this.api.on('didFinishLaunching', () => {      
       this.discoverDevices();
-      this.engine.connect();
+      this.engine.connect();      
     });
   }
 
@@ -72,7 +71,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
       for (const accesory of this.homeworksAccesories) {
         this.log.debug('[Platform] Requesting updates for:', accesory.name);
         const command = `?OUTPUT,${accesory._integrationId},1`;
-        engine.send(command);
+        engine.send(command);        
       }
     };
 
@@ -80,9 +79,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
     engine.registerDidConnectCallback(connectedCallback);
   }
 
-  
-
-  // <<<<<<<<<<<<<<<<<<[HOMEBRIDGE]<<<<<<<<<<<<<<<<<<<
+  // <<<<<<<<<<<<<<<<<<[HOMEBRIDGE APIs]<<<<<<<<<<<<<<<<<<<
   /**
    * This function is invoked when homebridge restores cached accessories from disk at startup.
    * It should be used to setup event handlers for characteristics and update respective values.
@@ -90,8 +87,6 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
   configureAccessory(accessory: PlatformAccessory) {    
     this.cachedPlatformAccessories.push(accessory);
   }
-
-  
   
   /**
    * This is an example method showing how to register discovered accessories.
@@ -99,54 +94,42 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
    * must not be registered again to prevent "duplicate UUID" errors.
    */
   discoverDevices() {
-    
+    let accesoriesToRemove = this.cachedPlatformAccessories;
+    for (const confDevice of this.configuration.devices) {       //Iterate thru the devices in config.
+      const uuid = this.api.hap.uuid.generate(confDevice.integrationID);            
+      let loadedAccesory = this.cachedPlatformAccessories.find(accessory => accessory.UUID === uuid);
+      accesoriesToRemove = accesoriesToRemove.filter(item=> item.UUID !== loadedAccesory?.UUID);
 
-    // this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, this.cachedPlatformAccessories);
-
-    for (const confDevice of this.configuration.devices) {      
-      const uuid = this.api.hap.uuid.generate(confDevice.integrationID);
-    
-
-      let loadedAccesory = this.cachedPlatformAccessories.find(accessory => accessory.UUID === uuid);            
-      
-      if (loadedAccesory === undefined || loadedAccesory === null) {
+      if (loadedAccesory === undefined || loadedAccesory === null) { //New Device
         this.log.info('+ Creating:', confDevice.name);
         const accessory = new this.api.platformAccessory(confDevice.name, uuid);
         accessory.context.device = confDevice;
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
         loadedAccesory = accessory;
-      } 
+      } else { //Updated Davice
+        loadedAccesory.context.device = confDevice;
+        loadedAccesory.displayName = confDevice.name;
+        this.api.updatePlatformAccessories([loadedAccesory]);
+      }
 
-      loadedAccesory.context.device = confDevice;
-      loadedAccesory.displayName = confDevice.name;
-      
-            
-      this.api.updatePlatformAccessories([loadedAccesory]);
-      
+      if (loadedAccesory) { 
+        this.log.info('~ Registering: %s as %s', loadedAccesory.displayName, confDevice.name); //Registering to platform
+        const hwa = new HomeworksAccesory(this, loadedAccesory, loadedAccesory.UUID, confDevice.integrationID);                        
+        this.homeworksAccesories.push(hwa);
 
-      if (loadedAccesory) {
-        this.log.info('~ Registering: %s as %s', loadedAccesory.displayName, confDevice.name);        
-        const hwa = new HomeworksAccesory(this, loadedAccesory, loadedAccesory.UUID, confDevice.integrationID);
-        
-        // >>>Setup Callback to HomeworksAccesory
-        hwa.homekitBrightnessUpdate = (value: number, accesory:HomeworksAccesory) : void => {          
+        hwa.homekitBrightnessUpdate = (value: number, accesory:HomeworksAccesory) : void => { //Callback from HK
           const command = `#OUTPUT,${accesory._integrationId},1,${value},00:01`;
           this.log.info('Updating fixture state to: %s %s', value, accesory.name);
           this.engine.send(command);          
         };
-               
-
-        this.homeworksAccesories.push(hwa);
-            
-
       } else {
         this.log.error('[platform] Unable to load accesory. [Error]');
       }
+      if (accesoriesToRemove.length > 0) {
+        this.log.warn('[platform] Removing: %i accesories', accesoriesToRemove.length);
+        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, accesoriesToRemove);
+      }
     }
-    // if (accesoriesToUpdate.length > 0) {
-    //   this.log.warn('[platform] Updating %i accesories.', accesoriesToUpdate.length);
-    //   this.api.updatePlatformAccessories(accesoriesToUpdate);      
-    // }
-
   }
+
 }
