@@ -53,15 +53,16 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
    */
   private setupNetworkEngineCallbacks(engine: NetworkEngine) {
     const rxCallback = (engine: NetworkEngine, message:string) : void => {      
-      const splittedMessage = /^~OUTPUT,(\d+),1,([\d\.]+)/.exec(message);
+      // const splittedMessage = /^~OUTPUT,(\d+),1,([\d\.]+)/.exec(message);
+      const splittedMessage = /^~OUTPUT,(\d+),1,([\d.]+)/.exec(message);
       if (splittedMessage) {
         const deviceId = splittedMessage[1];
         const brigthness = Number(splittedMessage[2]);
         const uuid = this.api.hap.uuid.generate(deviceId);
-        const targetDevice = this.homeworksAccesories.find(accessory => accessory.UUID === uuid);
+        const targetDevice = this.homeworksAccesories.find(accessory => accessory.getUUID() === uuid);
         
         if (targetDevice) { //Found 
-          this.log.debug('[Platform][EngineCallback] Set: %s to: %i', targetDevice.name, brigthness);
+          this.log.debug('[Platform][EngineCallback] Set: %s to: %i', targetDevice.getName(), brigthness);
           targetDevice.updateBrightness(brigthness);          
         }
       }
@@ -69,8 +70,8 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
 
     const connectedCallback = (engine: NetworkEngine) : void => {      
       for (const accesory of this.homeworksAccesories) {
-        this.log.debug('[Platform] Requesting updates for:', accesory.name);
-        const command = `?OUTPUT,${accesory._integrationId},1`;
+        this.log.debug('[Platform] Requesting updates for:', accesory.getName());
+        const command = `?OUTPUT,${accesory.getIntegrationId},1`;
         engine.send(command);        
       }
     };
@@ -79,22 +80,21 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
     engine.registerDidConnectCallback(connectedCallback);
   }
 
-  // <<<<<<<<<<<<<<<<<<[HOMEBRIDGE APIs]<<<<<<<<<<<<<<<<<<<
+  // <<<<<<<<<<<<<<<<<<[HD_API]<<<<<<<<<<<<<<<<<<<
+
   /**
-   * This function is invoked when homebridge restores cached accessories from disk at startup.
-   * It should be used to setup event handlers for characteristics and update respective values.
+   * Called when homebridge restores cached accessories from disk at startup.   
    */
   configureAccessory(accessory: PlatformAccessory) {    
     this.cachedPlatformAccessories.push(accessory);
   }
   
   /**
-   * This is an example method showing how to register discovered accessories.
-   * Accessories must only be registered once, previously created accessories
-   * must not be registered again to prevent "duplicate UUID" errors.
+   * Register devices in HomeKit (Api Method)
    */
   discoverDevices() {
     let accesoriesToRemove = this.cachedPlatformAccessories;
+    
     for (const confDevice of this.configuration.devices) {       //Iterate thru the devices in config.
       const uuid = this.api.hap.uuid.generate(confDevice.integrationID);            
       let loadedAccesory = this.cachedPlatformAccessories.find(accessory => accessory.UUID === uuid);
@@ -114,12 +114,12 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
 
       if (loadedAccesory) { 
         this.log.info('~ Registering: %s as %s', loadedAccesory.displayName, confDevice.name); //Registering to platform
-        const hwa = new HomeworksAccesory(this, loadedAccesory, loadedAccesory.UUID, confDevice.integrationID);                        
+        const hwa = new HomeworksAccesory(this, loadedAccesory, loadedAccesory.UUID, confDevice.integrationID, confDevice.isDimmable);
         this.homeworksAccesories.push(hwa);
 
         hwa.homekitBrightnessUpdate = (value: number, accesory:HomeworksAccesory) : void => { //Callback from HK
-          const command = `#OUTPUT,${accesory._integrationId},1,${value},00:01`;
-          this.log.info('Updating fixture state to: %s %s', value, accesory.name);
+          const command = `#OUTPUT,${accesory.getIntegrationId()},1,${value},00:01`;
+          this.log.debug('Updating fixture state to: %s %s // %s', value, accesory.getName(), command);
           this.engine.send(command);          
         };
       } else {
