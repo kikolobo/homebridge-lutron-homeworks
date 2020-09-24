@@ -134,10 +134,11 @@ export class NetworkEngine {
       this.log.debug('[Network] DidConnectCallback Registered.');  
     }
 
-    public fireDidReceiveCallbacks(message:string) {
+    public fireDidReceiveCallbacks(message:string) {            
       for (const callback of this.didReceiveCallbacks) {        
         callback(this, message);
       }
+      // this.log.debug('<<<<<<<<<<<<<<<<<<<');  
     }
 
     public fireDidConnectCallbacks() {

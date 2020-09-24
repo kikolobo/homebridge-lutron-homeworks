@@ -141,9 +141,9 @@ export class HomeworksAccesory {
       this.service.updateCharacteristic(this.platform.Characteristic.On, false);
     }
     
-    if (this.getIsDimmable() === true) {
-      this.service.updateCharacteristic(this.platform.Characteristic.Brightness, brightnessVal);
-    } 
+    // if (this.getIsDimmable() === true) {
+    this.service.updateCharacteristic(this.platform.Characteristic.Brightness, brightnessVal);
+    // } 
     
   }
 
