@@ -63,6 +63,12 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
         if (singleMessage === '') {
           continue; 
         }
+       
+        if (singleMessage.includes('~SYSTEM,6,') === true) { //This is considered a PONG reply.
+          this.log.debug('[platform][Pong] Received'); //TODO: Move to NETWORK Class (why waste cycles here)
+          continue;
+        }
+
         this.log.debug('[platform][traffic]', singleMessage);      
       
       
