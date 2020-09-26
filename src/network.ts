@@ -102,7 +102,7 @@ export class NetworkEngine {
           return;
         }
          
-        if (stringData.includes('QNET>')) { // Prompt          
+        if (stringData.includes('T>')) { // Prompt (QNET>)
           if (this.status === ComState.Authenticating) {
             this.status = ComState.Establishing;
             // this.log.debug('[Network] Got Prompt');
