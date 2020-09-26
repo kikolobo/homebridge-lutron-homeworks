@@ -137,8 +137,7 @@ export class NetworkEngine {
     public fireDidReceiveCallbacks(message:string) {            
       for (const callback of this.didReceiveCallbacks) {        
         callback(this, message);
-      }
-      // this.log.debug('<<<<<<<<<<<<<<<<<<<');  
+      }      
     }
 
     public fireDidConnectCallbacks() {
