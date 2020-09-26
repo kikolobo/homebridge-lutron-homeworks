@@ -18,7 +18,7 @@ enum ComState {
 
 export class NetworkEngine {
     private readonly net = require('net');
-    private readonly socket = new this.net.Socket();
+    private socket = new this.net.Socket();
     private status: ComState = ComState.Boot;    
     private crlf = '\r\n';     
     
@@ -32,12 +32,15 @@ export class NetworkEngine {
         private username: string,
         private password: string,
     ) {
-      this.setupBinding();
-      this.setupSocketListeners();
+      
       this.log.debug('[Network] Instance Ready');
     }
 
-    connect() {
+    connect() {      
+      this.socket = new this.net.Socket();
+      this.setupBinding();
+      this.setupSocketListeners();
+      
       this.log.info('[Network] Connecting to:', this.host);
       
       if (this.status === ComState.Boot) {
@@ -66,18 +69,17 @@ export class NetworkEngine {
     // Setup Helpers <<<<<<<<<<<<<<<<<<<<<<<<<<<<
     private setupBinding() {
       this.socket.on('error', (err) => {      
-        this.log.debug('[Network] Error: ', err);      
+        this.log.debug('[Network] Error: ', err);         
       });
 
       this.socket.on('close', () => {      
         this.status = ComState.Disconnected;
-        this.log.error('[Network] Connection Lost');
+        this.log.error('[Network] Connection Lost. Reconnect Attempt in 3 Secs.');
+        setTimeout(() => {
+          this.status = ComState.Boot;
+          this.connect();
+        }, 3000);
       }); 
-      
-      this.socket.on('end', () => {      
-        this.status = ComState.Disconnected;
-        this.log.error('[Network] Connection Ended');
-      });  
        
     }
 
@@ -102,8 +104,9 @@ export class NetworkEngine {
         if (stringData.includes('QNET>')) { // Prompt          
           if (this.status === ComState.Authenticating) {
             this.status = ComState.Establishing;
+            // this.log.debug('[Network] Got Prompt');
             this.log.debug('[Network] Requesting Monitoring Query');
-            this.socket.write('#MONITORING,5,1' + this.crlf); // Send Monitoring Query            
+            this.socket.write('#MONITORING,5,1' + this.crlf); // Send Monitoring Query             
           } 
           return;
         }
@@ -112,7 +115,8 @@ export class NetworkEngine {
           if (this.status === ComState.Establishing) {
             this.status = ComState.Ready;
             this.log.debug('[Network] Monitoring Query Acknowledged');
-            this.fireDidConnectCallbacks();            
+            this.fireDidConnectCallbacks();  
+            this.setAutoPing();          
           }
           return;
         }
@@ -120,6 +124,16 @@ export class NetworkEngine {
         this.fireDidReceiveCallbacks(stringData);             
         
       });
+    }
+
+    private setAutoPing() {      
+      setTimeout(() => {        
+        if (this.status === ComState.Ready) {
+          this.log.debug('[Network] Ping Sent');
+          this.socket.write('?SYSTEM,8' + this.crlf); // Send Ping (OS REV)
+        }
+        this.setAutoPing();
+      }, 59000);
     }
 
 
@@ -139,6 +153,7 @@ export class NetworkEngine {
         callback(this, message);
       }      
     }
+    
 
     public fireDidConnectCallbacks() {
       for (const callback of this.didConnectCallbacks) {        
