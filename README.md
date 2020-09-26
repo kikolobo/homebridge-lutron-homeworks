@@ -4,11 +4,16 @@
 
 </p>
 
-
 # Homebridge Lutron Homeworks Plugin
 
-This plugin intends to integrate HomeKit with Lutron Homeworks processors. It has been tested with QS but should work with any Homeworks systems. Currently only supports Homeworks processors but if there's enough interest it should't be difficult to expanded to other Lutron systems.
+This plugin intends to integrate Lutron Homeworks lighting automation processors to Apple Homekit via Homebridge (http://homebridge.io) platform.
 
-To install, please follow normal Homebridge install procedures, and use the config UI to add loads or dimmers to your system. 
+In its current form it only accepts dimmers or laods and it has only been tested with Homeworks QS systems but it should work with any Lutron systems (Caseta/RadioRA I, II) since it uses standard lutron integration protocol via sockets (telnet as Lutron calls it).
 
-This is a work in progress and we are currently releasing as Beta. Please open an issue to let me know on any problems you encounter.
+I plan to integrate more devices like viartual keypad presses and sensors if enough people wants it.
+
+To install, please follow normal Homebridge install procedures, and use the config UI to add lights.
+
+Also you will need lutron telnet access which you will need to gather your credentials from your installer.
+
+This is a work in progress and we are currently releasing as Beta. Please open an issue to let me know on any problems you encounter or suggestions.
