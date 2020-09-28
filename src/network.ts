@@ -59,9 +59,9 @@ export class NetworkEngine {
 
     send(message:string) {
       if (this.status !== ComState.Ready) {
-        this.log.error('[Network] Socket not ready. Request to send ignored.');
-        return; 
+        this.log.error('[Network] Socket not ready.  Will attempt sending.');        
       }
+
       this.socket.write(message + this.crlf);      
     }
 
