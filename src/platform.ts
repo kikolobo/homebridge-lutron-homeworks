@@ -115,8 +115,16 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
    */
   discoverDevices() {
     
-    const brightnessUpdateCallback = (value: number, accesory:HomeworksAccesory) : void => { //Callback from HK
-      const command = `#OUTPUT,${accesory.getIntegrationId()},1,${value},00:01`;
+    const brightnessUpdateCallback = (value: number, isDimmable: boolean, accesory:HomeworksAccesory) : void => { //Callback from HK
+      
+      let fadeTime = '00:01';
+      
+      if (isDimmable === false) {
+        fadeTime = '00:00';
+      }
+      
+      const command = `#OUTPUT,${accesory.getIntegrationId()},1,${value},${fadeTime}`;
+
       this.log.debug('[Platform] brightnessUpdateCallback to: %s %s // %s', value, accesory.getName(), command);
       this.engine.send(command);          
     };

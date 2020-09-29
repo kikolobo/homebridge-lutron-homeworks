@@ -1,6 +1,6 @@
 import { Service, PlatformAccessory, CharacteristicValue, CharacteristicSetCallback, CharacteristicGetCallback } from 'homebridge';
 import { HomeworksPlatform } from './platform';
-interface SendBrightnessCommand { (value: number, accesory:HomeworksAccesory): void }
+interface SendBrightnessCommand { (value: number, isDimmable:boolean, accesory:HomeworksAccesory): void }
 
 
 //*************************************
@@ -38,9 +38,10 @@ export class HomeworksAccesory {
 
     //Set Info
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
-      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Default-Manufacturer')
-      .setCharacteristic(this.platform.Characteristic.Model, 'Default-Model')
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, 'Default-Serial');
+      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Homebridge')
+      .setCharacteristic(this.platform.Characteristic.Model, 'Homeworks Plugin')
+      .setCharacteristic(this.platform.Characteristic.SerialNumber, 'n/a')
+      .setCharacteristic(this.platform.Characteristic.FirmwareRevision, 0.2);
 
     //Assign HK Service
     this.service = this.accessory.getService(this.platform.Service.Lightbulb) || this.accessory.addService(this.platform.Service.Lightbulb);
@@ -53,9 +54,11 @@ export class HomeworksAccesory {
       .on('get', this.getOn.bind(this));               // GET - bind to the `getOn` method below
 
     // register handlers for the Brightness Characteristic
-    this.service.getCharacteristic(this.platform.Characteristic.Brightness)
-      .on('set', this.setBrightness.bind(this))       // SET - bind to the 'setBrightness` method below
-      .on('get', this.getBrightness.bind(this));      // GET - bind to the 'getBrightness` method below
+    if (this.getIsDimmable() === true) {
+      this.service.getCharacteristic(this.platform.Characteristic.Brightness)
+        .on('set', this.setBrightness.bind(this))       // SET - bind to the 'setBrightness` method below
+        .on('get', this.getBrightness.bind(this));      // GET - bind to the 'getBrightness` method below
+    }
   }
 
   //*************************************
@@ -107,16 +110,17 @@ export class HomeworksAccesory {
 
   private setOn(value: CharacteristicValue, callback: CharacteristicSetCallback) {
     this.dimmerState.On = value as boolean;
-    
+    const isDimmable = this.getIsDimmable();
+
     if (value === true) {
       this.dimmerState.Brightness = 100;
       if (this.homekitBrightnessUpdate) {
-        this.homekitBrightnessUpdate(100, this);
+        this.homekitBrightnessUpdate(100, isDimmable, this);
       }
     } else {
       this.dimmerState.Brightness = 0;
       if (this.homekitBrightnessUpdate) {
-        this.homekitBrightnessUpdate(0, this);
+        this.homekitBrightnessUpdate(0, isDimmable, this);
       }
     }
   
@@ -177,7 +181,7 @@ export class HomeworksAccesory {
     }    
 
     if (this.homekitBrightnessUpdate) {
-      this.homekitBrightnessUpdate(brightnessVal, this);
+      this.homekitBrightnessUpdate(brightnessVal, this.getIsDimmable(), this);
     }
     
     callback(null); // null or error
