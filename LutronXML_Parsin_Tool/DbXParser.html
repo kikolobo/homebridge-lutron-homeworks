@@ -1,0 +1,131 @@
+<!DOCTYPE html> 
+<html> 
+  
+<head> 
+    <title>JSON Config Generator</title> 
+</head> 
+  
+<body>
+    <h1>Homebridge-Homeworks Configuration Generator</h1>
+    You will need a HWQS XML File from your Lutron processor.<br>
+    More info:<a href="https://www.lutron.com/TechnicalDocumentLibrary/HWQS_XML_Extraction_FAQ.pdf">Extraction FAQ</a><br>
+    <hr><br>
+    Type the following information in the fields before you load the XML file.<br>
+    NOTE: No validation will be performed.
+    <br><br>
+    Host Address: <input type="text" id="host" value=""> <br>
+    Port: <input type="text" id="port" value=""> <br>
+    Username: <input type="text" id="username" value=""> <br>
+    Password: <input type="text" id="password" value=""> <br>
+    Device name should include Area: <input type="checkbox" id="includeAreaName" checked="true"><br><br>
+
+    
+
+    Lutron DbXmInfo.xml File: <input type="file" name="inputfile"
+            id="inputfile" onclick="getFile()"> <br><br>
+            JSON Text will be created automatically below after loading the XML file.<br>Copy & Paste text to the JSON settings in HomeBridge. Replace the whole platform block that belongs to the Homeworks integration.
+            <hr>
+   
+    <div id="output">  </div> 
+    <script type="text/javascript">
+        console.log("Here....");
+    </script>
+</body> 
+  
+</html> 
+
+<script type="text/javascript">	
+
+
+
+function getFile() {
+     document.getElementById('inputfile') 
+            .addEventListener('change', function() { 
+              
+            var fr=new FileReader(); 
+            fr.onload=function(){ 
+                console.log("Readed....");
+                // document.getElementById('output').textContent=fr.result; 
+                parseXML(fr.result);
+            } 
+              
+            fr.readAsText(this.files[0]); 
+        });
+}
+
+function parseXML(text)
+{	
+    var txt = text.split("/>");
+    var out = "";
+    var i = 0;
+    var currentArea = "";
+    var fixtureName = ""
+    var integID = "";    
+    var FriendlyName = "";
+    var includeAreaName = document.getElementById("includeAreaName").checked;
+    var configObject = {
+            "host": document.getElementById("host").value,
+            "apiPort": document.getElementById("port").value,
+            "username": document.getElementById("username").value,
+            "password": document.getElementById("password").value,                        
+            "devices": [],
+            "platform": "Homeworks",
+        };
+
+    var deviceObjects = new Array();
+    var integrationIDs = new Array();
+    var duplicateFlag = false;
+
+    
+    for (i = 0; i < txt.length ;i++) {
+        if (txt[i] !== "") {
+            if (txt[i].includes("Area Name") === true) {
+                var tag = txt[i].split("\"");
+                currentArea = tag[1];
+            }
+            if (txt[i].includes("Output Name=") === true) {
+                var tag = txt[i].split("\"");                
+
+                fixtureName = tag[1].trim();
+                integID = tag[5].trim();
+
+                
+                if (integrationIDs.filter(integrationId => integrationId === integID).length > 0) {
+                    duplicateFlag = true;
+                }
+                
+                if (includeAreaName === true) {
+                    FriendlyName = currentArea + " " + fixtureName;
+                } else {
+                    FriendlyName = fixtureName;
+                }
+
+                out += currentArea + "  =  " +  fixtureName + "  [" + integID + "]  " + "  > " + FriendlyName + "\n";
+                
+                var device = {"name": FriendlyName,
+                    "integrationID": integID,
+                    "isDimmable": true};
+
+                integrationIDs.push(integID);
+                deviceObjects.push(device)
+            }            
+        }
+    }
+        
+    
+    configObject.devices = deviceObjects;
+    if (duplicateFlag === false) {
+        document.getElementById("output").innerHTML = sanitizeHTML(JSON.stringify(configObject,undefined, 4));
+    } else {
+       document.getElementById("output").innerHTML = "<p style='color:red'>ERROR: Multiple accessories are using the same Lutron IntegrationID. A unique ID is required.</br> Please edit your XML document to remove redundant devices.</p>";
+    }
+
+}
+
+ function sanitizeHTML(text) {
+  var element = document.createElement('div');
+  element.innerText = text;
+  return element.innerHTML;
+}
+
+</script>

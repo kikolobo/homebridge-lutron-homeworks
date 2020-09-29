@@ -54,8 +54,8 @@ export class HomeworksAccesory {
 
     // register handlers for the Brightness Characteristic
     this.service.getCharacteristic(this.platform.Characteristic.Brightness)
-      .on('set', this.setBrightness.bind(this));       // SET - bind to the 'setBrightness` method below
-    // .on('get', this.getBrightness.bind(this));      // GET - bind to the 'getBrightness` method below
+      .on('set', this.setBrightness.bind(this))       // SET - bind to the 'setBrightness` method below
+      .on('get', this.getBrightness.bind(this));      // GET - bind to the 'getBrightness` method below
   }
 
   //*************************************
@@ -183,12 +183,12 @@ export class HomeworksAccesory {
     callback(null); // null or error
   }
 
-  // private getBrightness(callback: CharacteristicGetCallback) {    
-  //   const brightness = this.dimmerState.Brightness;
+  private getBrightness(callback: CharacteristicGetCallback) {    
+    const brightness = this.dimmerState.Brightness;
 
-  //   this.platform.log.debug('Get Characteristic Brightness -> %i %s', brightness, this._name);
+    this.platform.log.debug('Get Characteristic Brightness -> %i %s', brightness, this._name);
     
-  //   callback(null, brightness); //error,value
-  // }
+    callback(null, brightness); //error,value
+  }
 
 }
