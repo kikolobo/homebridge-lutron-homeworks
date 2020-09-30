@@ -6,7 +6,7 @@
 
 # Homebridge Lutron Homeworks Plugin
 
-##Welcome:
+## Welcome:
 This plugin was designed to help integrate Lutron Homeworks lighting automation processors to Apple Homekit via Homebridge (http://homebridge.io) platform.
 
 The lights you will like to control should be specified in the plugin-platform setup file, see the setup section for more information. This plugin will add/remove/update lights as you update the setup. 
