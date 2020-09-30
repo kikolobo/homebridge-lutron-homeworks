@@ -58,9 +58,7 @@ export class HomeworksAccesory {
       this.service.getCharacteristic(this.platform.Characteristic.Brightness)        
         .on('set', this.setBrightness.bind(this))       // SET - bind to the 'setBrightness` method below
         .on('get', this.getBrightness.bind(this));      // GET - bind to the 'getBrightness` method below
-    } else {
-      this.platform.log.debug('NONE DIM');
-    }
+    } 
   }
 
   //*************************************
