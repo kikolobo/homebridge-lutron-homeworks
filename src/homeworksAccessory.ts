@@ -1,6 +1,6 @@
 import { Service, PlatformAccessory, CharacteristicValue, CharacteristicSetCallback, CharacteristicGetCallback } from 'homebridge';
 import { HomeworksPlatform } from './platform';
-interface SendBrightnessCommand { (value: number, isDimmable:boolean, accesory:HomeworksAccesory): void }
+interface SetBrightnessCallback { (value: number, isDimmable:boolean, accesory:HomeworksAccesory): void }
 
 
 //*************************************
@@ -10,7 +10,7 @@ interface SendBrightnessCommand { (value: number, isDimmable:boolean, accesory:H
  */
 export class HomeworksAccesory {
   private service: Service;
-  public homekitBrightnessUpdate? : SendBrightnessCommand;
+  public setHomekitBrightnessCallback? : SetBrightnessCallback;
 
   public dimmerState = {
     On: false,
@@ -101,11 +101,10 @@ export class HomeworksAccesory {
   }
 
   //*************************************
-  //* HomeKit Delegates 
+  //* HomeBridge Delegates 
+  
   /**
-   * Handle the "GET" requests from HomeKit
-   * @example
-   * this.service.updateCharacteristic(this.platform.Characteristic.On, true)
+   * Handle the "SET/GET" ON requests from HomeKit
    */
 
   private setOn(value: CharacteristicValue, callback: CharacteristicSetCallback) {
@@ -115,13 +114,13 @@ export class HomeworksAccesory {
 
     if (value === true) {
       this.dimmerState.Brightness = 100;
-      if (this.homekitBrightnessUpdate) {
-        this.homekitBrightnessUpdate(100, isDimmable, this);
+      if (this.setHomekitBrightnessCallback) {
+        this.setHomekitBrightnessCallback(100, isDimmable, this);
       }
     } else {
       this.dimmerState.Brightness = 0;
-      if (this.homekitBrightnessUpdate) {
-        this.homekitBrightnessUpdate(0, isDimmable, this);
+      if (this.setHomekitBrightnessCallback) {
+        this.setHomekitBrightnessCallback(0, isDimmable, this);
       }
     }
   
@@ -131,6 +130,72 @@ export class HomeworksAccesory {
   }
 
 
+
+  private getOn(callback: CharacteristicGetCallback) {
+    // implement your own code to check if the device is on
+    const isOn = this.dimmerState.On;
+
+    if (isOn) {
+      this.platform.log.debug('[Accesory] Get Characteristic isOn -> ON %s', this._name);      
+    } else {
+      this.platform.log.debug('[Accesory] Get Characteristic isOn -> OFF %s', this._name);      
+    }
+    
+    callback(null, isOn); //error,value
+  }    
+
+  /**
+   * Handle the "SET/GET" Brightness requests from HomeKit
+   */
+
+  private getBrightness(callback: CharacteristicGetCallback) {    
+    const brightness = this.dimmerState.Brightness;
+
+    this.platform.log.debug('[Accesory] Get Characteristic Brightness -> %i %s', brightness, this._name);
+    
+    callback(null, brightness); //error,value
+  }
+
+
+  private setBrightness(value: CharacteristicValue, callback: CharacteristicSetCallback) {
+    this.platform.log.debug('[Accesory] Set Characteristic Brightness -> %i %s', value, this.getName());
+
+    let brightnessVal = value as number;
+    const isDimmable = this.getIsDimmable();
+
+    if (isDimmable === false) { // No Dim? Brightness should be 0 or 100%
+      if (this.dimmerState.On === true || brightnessVal > 0) {
+        brightnessVal = 100;        
+      } else {
+        brightnessVal = 0;
+      } 
+    }
+        
+    this.dimmerState.Brightness = brightnessVal;
+    
+    if (brightnessVal > 0) {
+      this.dimmerState.On = true; 
+    } else {
+      this.dimmerState.On = false; 
+    }    
+
+    if (this.setHomekitBrightnessCallback) {
+      this.setHomekitBrightnessCallback(brightnessVal, isDimmable, this); 
+    }
+    
+    
+
+    callback(null); // null or error
+  }
+
+  //*************************************
+  //* Accesory Interface 
+
+  /**
+   * Called from platform when we need to update Homekit
+   * With new values from processor.
+   */
+  
   public updateBrightness(brightnessVal: CharacteristicValue) {
     this.platform.log.debug('[Accesory] Update Characteristic Brightness -> %i %s', brightnessVal, this._name);
     this.dimmerState.Brightness = brightnessVal as number;    
@@ -147,67 +212,7 @@ export class HomeworksAccesory {
       this.service.updateCharacteristic(this.platform.Characteristic.On, false);
     }
     
-    // if (this.getIsDimmable() === true) {
     this.service.updateCharacteristic(this.platform.Characteristic.Brightness, brightnessVal);
-    // } 
-    
-  }
-
-  private getOn(callback: CharacteristicGetCallback) {
-    // implement your own code to check if the device is on
-    const isOn = this.dimmerState.On;
-
-    if (isOn) {
-      this.platform.log.debug('[Accesory] Get Characteristic isOn -> ON %s', this._name);      
-    } else {
-      this.platform.log.debug('[Accesory] Get Characteristic isOn -> OFF %s', this._name);      
-    }
-    
-    callback(null, isOn); //error,value
-  }
-    
-
-  /**
-   * Handle "SET" requests from HomeKit
-   * These are sent when the user changes the state of an accessory, for example, changing the Brightness
-   */
-  private setBrightness(value: CharacteristicValue, callback: CharacteristicSetCallback) {
-    let brightnessVal = value as number;
-    const isDimmable = this.getIsDimmable();
-
-    if (isDimmable === false) { //It's eigher 100 or 0.
-      if (this.dimmerState.On === true || brightnessVal > 0) {
-        brightnessVal = 100;        
-      } else {
-        brightnessVal = 0;
-      } 
-    }
-
-    this.platform.log.debug('[Accesory] Set Characteristic Brightness -> %i %s', value, this._name);
-    // implement your own code to set the brightness
-    this.dimmerState.Brightness = brightnessVal;
-    
-    if (brightnessVal > 0) {
-      this.dimmerState.On = true; 
-    } else {
-      this.dimmerState.On = false; 
-    }    
-
-    if (this.homekitBrightnessUpdate) {
-      this.homekitBrightnessUpdate(brightnessVal, isDimmable, this);
-    }
-    
-    
-
-    callback(null); // null or error
-  }
-
-  private getBrightness(callback: CharacteristicGetCallback) {    
-    const brightness = this.dimmerState.Brightness;
-
-    this.platform.log.debug('[Accesory] Get Characteristic Brightness -> %i %s', brightness, this._name);
-    
-    callback(null, brightness); //error,value
   }
 
 }
