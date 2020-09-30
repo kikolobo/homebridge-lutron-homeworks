@@ -1,6 +1,6 @@
 import { Service, PlatformAccessory, CharacteristicValue, CharacteristicSetCallback, CharacteristicGetCallback } from 'homebridge';
 import { HomeworksPlatform } from './platform';
-interface SetBrightnessCallback { (value: number, isDimmable:boolean, accesory:HomeworksAccesory): void }
+interface SetLutronBrightnessCallback { (value: number, isDimmable:boolean, accesory:HomeworksAccesory): void }
 
 
 //*************************************
@@ -10,7 +10,7 @@ interface SetBrightnessCallback { (value: number, isDimmable:boolean, accesory:H
  */
 export class HomeworksAccesory {
   private service: Service;
-  public setHomekitBrightnessCallback? : SetBrightnessCallback;
+  public setLutronBrightnessCallback? : SetLutronBrightnessCallback;
 
   public dimmerState = {
     On: false,
@@ -107,38 +107,41 @@ export class HomeworksAccesory {
    * Handle the "SET/GET" ON requests from HomeKit
    */
 
-  private setOn(value: CharacteristicValue, callback: CharacteristicSetCallback) {
+  private setOn(targetValue: CharacteristicValue, callback: CharacteristicSetCallback) {
     const isDimmable = this.getIsDimmable();
-    this.dimmerState.On = value as boolean;
-    
 
-    if (value === true) {
+    if (targetValue === this.dimmerState.On) {
+      callback(null);
+      return; 
+    } 
+
+    this.dimmerState.On = targetValue as boolean;
+    
+    if (targetValue === true) {
       this.dimmerState.Brightness = 100;
-      if (this.setHomekitBrightnessCallback) {
-        this.setHomekitBrightnessCallback(100, isDimmable, this);
-      }
     } else {
       this.dimmerState.Brightness = 0;
-      if (this.setHomekitBrightnessCallback) {
-        this.setHomekitBrightnessCallback(0, isDimmable, this);
-      }
     }
-  
-    this.platform.log.debug('[Accesory] setOn: %s [name: %s / dim: %s]', 
-      this.dimmerState.On, this._name, this._dimmable);
+    this.service.updateCharacteristic(this.platform.Characteristic.Brightness, this.dimmerState.Brightness);
+    
+    if (this.setLutronBrightnessCallback) {
+      this.setLutronBrightnessCallback(this.dimmerState.Brightness, isDimmable, this);
+    }
+
+    this.platform.log.debug('[Accesory][setOn] %s [name: %s|dim: %s]', this.dimmerState.On, this._name, this._dimmable);
+
     callback(null);
   }
 
 
 
   private getOn(callback: CharacteristicGetCallback) {
-    // implement your own code to check if the device is on
     const isOn = this.dimmerState.On;
 
-    if (isOn) {
-      this.platform.log.debug('[Accesory] Get Characteristic isOn -> ON %s', this._name);      
+    if (isOn === true) {
+      this.platform.log.debug('[Accesory][getOn] %s is ON', this.getName());
     } else {
-      this.platform.log.debug('[Accesory] Get Characteristic isOn -> OFF %s', this._name);      
+      this.platform.log.debug('[Accesory][getOn] %s is OFF', this.getName());
     }
     
     callback(null, isOn); //error,value
@@ -157,33 +160,22 @@ export class HomeworksAccesory {
   }
 
 
-  private setBrightness(value: CharacteristicValue, callback: CharacteristicSetCallback) {
-    this.platform.log.debug('[Accesory] Set Characteristic Brightness -> %i %s', value, this.getName());
+  private setBrightness(targetValue: CharacteristicValue, callback: CharacteristicSetCallback) {
 
-    let brightnessVal = value as number;
-    const isDimmable = this.getIsDimmable();
+    if (targetValue === this.dimmerState.Brightness) {
+      callback(null);
+      return;
+    }
+    
+    this.platform.log.debug('[Accesory] Set Characteristic Brightness -> %i %s', targetValue, this.getName());
 
-    if (isDimmable === false) { // No Dim? Brightness should be 0 or 100%
-      if (this.dimmerState.On === true || brightnessVal > 0) {
-        brightnessVal = 100;        
-      } else {
-        brightnessVal = 0;
-      } 
+    const targetBrightnessVal = targetValue as number;        
+    this.dimmerState.Brightness = targetBrightnessVal;
+
+    if (this.setLutronBrightnessCallback) {
+      this.setLutronBrightnessCallback(targetBrightnessVal, this.getIsDimmable(), this); 
     }
         
-    this.dimmerState.Brightness = brightnessVal;
-    
-    if (brightnessVal > 0) {
-      this.dimmerState.On = true; 
-    } else {
-      this.dimmerState.On = false; 
-    }    
-
-    if (this.setHomekitBrightnessCallback) {
-      this.setHomekitBrightnessCallback(brightnessVal, isDimmable, this); 
-    }
-    
-    
 
     callback(null); // null or error
   }
@@ -193,26 +185,25 @@ export class HomeworksAccesory {
 
   /**
    * Called from platform when we need to update Homekit
-   * With new values from processor.
+   * With new values from processor. (set externally)
    */
   
-  public updateBrightness(brightnessVal: CharacteristicValue) {
-    this.platform.log.debug('[Accesory] Update Characteristic Brightness -> %i %s', brightnessVal, this._name);
-    this.dimmerState.Brightness = brightnessVal as number;    
-    if (brightnessVal > 0) {
-      this.dimmerState.On = true; 
-    } else {
-      this.dimmerState.On = false;       
+  public updateBrightness(targetBrightnessVal: CharacteristicValue) { 
+    if (targetBrightnessVal === this.dimmerState.Brightness) {      
+      return; 
     }
 
+    this.platform.log.debug('[Accesory][updateBrightness] to %i for %s', targetBrightnessVal, this._name);
+
+    if (targetBrightnessVal > 0) {
+      this.dimmerState.On = true;
+    } else if (targetBrightnessVal <= 0) {
+      this.dimmerState.On = false;                   
+    }    
     
-    if (this.dimmerState.On === true) {
-      this.service.updateCharacteristic(this.platform.Characteristic.On, true);
-    } else {
-      this.service.updateCharacteristic(this.platform.Characteristic.On, false);
-    }
-    
-    this.service.updateCharacteristic(this.platform.Characteristic.Brightness, brightnessVal);
+    this.dimmerState.Brightness = targetBrightnessVal as number;    
+    this.service.updateCharacteristic(this.platform.Characteristic.On, this.dimmerState.On);
+    this.service.updateCharacteristic(this.platform.Characteristic.Brightness, this.dimmerState.Brightness);
   }
 
 }

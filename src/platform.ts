@@ -113,8 +113,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
    */
   discoverDevices() {
     
-    const brightnessUpdateCallback = (value: number, isDimmable: boolean, accesory:HomeworksAccesory) : void => { //Callback from HK
-      
+    const setLutronCallback = (value: number, isDimmable: boolean, accesory:HomeworksAccesory) : void => { //Callback from HK      
       let fadeTime = '00:01';
       
       if (isDimmable === false) {        
@@ -159,7 +158,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
         this.log.info('[Platform] Registering: %s as %s dim: %s', loadedAccesory.displayName, confDevice.name, isDimmable);
         const hwa = new HomeworksAccesory(this, loadedAccesory, loadedAccesory.UUID, confDevice.integrationID, isDimmable);
         this.homeworksAccesories.push(hwa);
-        hwa.setHomekitBrightnessCallback = brightnessUpdateCallback;
+        hwa.setLutronBrightnessCallback = setLutronCallback;
         allAddedAccesories.push(loadedAccesory);
       } else {
         this.log.error('[platform] Unable to load accesory. [Error]');
