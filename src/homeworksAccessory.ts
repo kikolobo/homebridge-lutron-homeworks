@@ -54,11 +54,11 @@ export class HomeworksAccesory {
       .on('get', this.getOn.bind(this));               // GET - bind to the `getOn` method below
 
     // register handlers for the Brightness Characteristic
-    if (this.getIsDimmable() === true) {
-      this.service.getCharacteristic(this.platform.Characteristic.Brightness)
-        .on('set', this.setBrightness.bind(this))       // SET - bind to the 'setBrightness` method below
-        .on('get', this.getBrightness.bind(this));      // GET - bind to the 'getBrightness` method below
-    }
+    // if (this.getIsDimmable() === true) {
+    this.service.getCharacteristic(this.platform.Characteristic.Brightness)
+      .on('set', this.setBrightness.bind(this))       // SET - bind to the 'setBrightness` method below
+      .on('get', this.getBrightness.bind(this));      // GET - bind to the 'getBrightness` method below
+    // }
   }
 
   //*************************************
@@ -170,10 +170,21 @@ export class HomeworksAccesory {
    * These are sent when the user changes the state of an accessory, for example, changing the Brightness
    */
   private setBrightness(value: CharacteristicValue, callback: CharacteristicSetCallback) {
-    const brightnessVal = value as number;
+    let brightnessVal = value as number;
+    const isDimmable = this.getIsDimmable();
+
+    if (isDimmable === false) { //It's eigher 100 or 0.
+      if (this.dimmerState.On === true || brightnessVal > 0) {
+        brightnessVal = 100;        
+      } else {
+        brightnessVal = 0;
+      } 
+    }
+
     this.platform.log.debug('Set Characteristic Brightness -> %i %s', value, this._name);
     // implement your own code to set the brightness
     this.dimmerState.Brightness = brightnessVal;
+    
     if (brightnessVal > 0) {
       this.dimmerState.On = true; 
     } else {
@@ -184,6 +195,8 @@ export class HomeworksAccesory {
       this.homekitBrightnessUpdate(brightnessVal, this.getIsDimmable(), this);
     }
     
+    
+
     callback(null); // null or error
   }
 
