@@ -119,13 +119,13 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
       
       let fadeTime = '00:01';
       
-      if (isDimmable === false) {
+      if (isDimmable === false) {        
         fadeTime = '00:00';
       }
       
       const command = `#OUTPUT,${accesory.getIntegrationId()},1,${value},${fadeTime}`;
 
-      this.log.debug('[Platform] brightnessUpdateCallback to: %s %s // %s', value, accesory.getName(), command);
+      this.log.debug('[Platform] brightnessUpdateCallback %s to %s (s)', accesory.getName(), value, command);
       this.engine.send(command);          
     };
 
@@ -143,15 +143,23 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
         loadedAccesory = accessory;
       } else { //Updated Davice
-        this.log.info('[Platform] ~ Updating:', confDevice.name);
-        loadedAccesory.context.device = confDevice;
-        loadedAccesory.displayName = confDevice.name;
+        this.log.debug('[Platform] ~ Updating:', confDevice.name);
+        loadedAccesory.context.device = confDevice;        
+        loadedAccesory.displayName = confDevice.name; //Will be updated unless changed in Homekit.        
         this.api.updatePlatformAccessories([loadedAccesory]);
       }
       
       if (loadedAccesory) { 
-        this.log.info('[Platform] >> Registering: %s as %s', loadedAccesory.displayName, confDevice.name); //Registering to platform
-        const hwa = new HomeworksAccesory(this, loadedAccesory, loadedAccesory.UUID, confDevice.integrationID, confDevice.isDimmable);
+        //Registering to platform
+        let isDimmable = true;
+        if (confDevice.isDimmable === undefined || confDevice.isDimmable === false) {
+          isDimmable = false;
+          confDevice.isDimmable = isDimmable;
+        }
+        
+
+        this.log.info('[Platform] Registering: %s as %s dim: %s', loadedAccesory.displayName, confDevice.name, isDimmable);
+        const hwa = new HomeworksAccesory(this, loadedAccesory, loadedAccesory.UUID, confDevice.integrationID, isDimmable);
         this.homeworksAccesories.push(hwa);
         hwa.homekitBrightnessUpdate = brightnessUpdateCallback;
         allAddedAccesories.push(loadedAccesory);

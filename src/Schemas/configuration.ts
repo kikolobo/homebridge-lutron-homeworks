@@ -30,5 +30,7 @@ export interface Configuration {
      * Gets or sets the password for the Homeworks processor.
      */
     password: string;
+
+
         
 }

@@ -54,11 +54,13 @@ export class HomeworksAccesory {
       .on('get', this.getOn.bind(this));               // GET - bind to the `getOn` method below
 
     // register handlers for the Brightness Characteristic
-    // if (this.getIsDimmable() === true) {
-    this.service.getCharacteristic(this.platform.Characteristic.Brightness)
-      .on('set', this.setBrightness.bind(this))       // SET - bind to the 'setBrightness` method below
-      .on('get', this.getBrightness.bind(this));      // GET - bind to the 'getBrightness` method below
-    // }
+    if (dimmable === true) {      
+      this.service.getCharacteristic(this.platform.Characteristic.Brightness)        
+        .on('set', this.setBrightness.bind(this))       // SET - bind to the 'setBrightness` method below
+        .on('get', this.getBrightness.bind(this));      // GET - bind to the 'getBrightness` method below
+    } else {
+      this.platform.log.debug('NONE DIM');
+    }
   }
 
   //*************************************
@@ -109,8 +111,9 @@ export class HomeworksAccesory {
    */
 
   private setOn(value: CharacteristicValue, callback: CharacteristicSetCallback) {
-    this.dimmerState.On = value as boolean;
     const isDimmable = this.getIsDimmable();
+    this.dimmerState.On = value as boolean;
+    
 
     if (value === true) {
       this.dimmerState.Brightness = 100;
@@ -124,13 +127,14 @@ export class HomeworksAccesory {
       }
     }
   
-    this.platform.log.debug('Set Characteristic isOn -> %s', this.dimmerState.On, this._name);
+    this.platform.log.debug('[Accesory] setOn: %s [name: %s / dim: %s]', 
+      this.dimmerState.On, this._name, this._dimmable);
     callback(null);
   }
 
 
   public updateBrightness(brightnessVal: CharacteristicValue) {
-    this.platform.log.debug('Update Characteristic Brightness -> %i %s', brightnessVal, this._name);
+    this.platform.log.debug('[Accesory] Update Characteristic Brightness -> %i %s', brightnessVal, this._name);
     this.dimmerState.Brightness = brightnessVal as number;    
     if (brightnessVal > 0) {
       this.dimmerState.On = true; 
@@ -156,9 +160,9 @@ export class HomeworksAccesory {
     const isOn = this.dimmerState.On;
 
     if (isOn) {
-      this.platform.log.debug('Get Characteristic isOn -> ON %s', this._name);      
+      this.platform.log.debug('[Accesory] Get Characteristic isOn -> ON %s', this._name);      
     } else {
-      this.platform.log.debug('Get Characteristic isOn -> OFF %s', this._name);      
+      this.platform.log.debug('[Accesory] Get Characteristic isOn -> OFF %s', this._name);      
     }
     
     callback(null, isOn); //error,value
@@ -181,7 +185,7 @@ export class HomeworksAccesory {
       } 
     }
 
-    this.platform.log.debug('Set Characteristic Brightness -> %i %s', value, this._name);
+    this.platform.log.debug('[Accesory] Set Characteristic Brightness -> %i %s', value, this._name);
     // implement your own code to set the brightness
     this.dimmerState.Brightness = brightnessVal;
     
@@ -192,7 +196,7 @@ export class HomeworksAccesory {
     }    
 
     if (this.homekitBrightnessUpdate) {
-      this.homekitBrightnessUpdate(brightnessVal, this.getIsDimmable(), this);
+      this.homekitBrightnessUpdate(brightnessVal, isDimmable, this);
     }
     
     
@@ -203,7 +207,7 @@ export class HomeworksAccesory {
   private getBrightness(callback: CharacteristicGetCallback) {    
     const brightness = this.dimmerState.Brightness;
 
-    this.platform.log.debug('Get Characteristic Brightness -> %i %s', brightness, this._name);
+    this.platform.log.debug('[Accesory] Get Characteristic Brightness -> %i %s', brightness, this._name);
     
     callback(null, brightness); //error,value
   }
