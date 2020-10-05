@@ -7,7 +7,7 @@
 # Homebridge Lutron Homeworks Plugin
 
 ## Welcome:
-Lutron Homeworks lighting integration to Homekit, via Homebridge platform. This will help to see your lights from your lutron processor in Apple Homekit. This plugin is for the Homebridge (http://homebridge.io) platform.
+This is a HomeBridge plugin to integrate Lutron Homeworks lighting systems to Homekit. This will help control your lights of your lutron system in Apple Homekit.
 
 In the current version the plugin only works with lights or 'Outputs' and it has only been tested with Homeworks QS systems. It should work with any Lutron processor that has network (telnet) capabilities and conforms to the lutron integration protocol (like Caseta/RadioRA I, II).
 
