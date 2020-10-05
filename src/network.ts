@@ -68,7 +68,7 @@ export class NetworkEngine {
     // Setup Helpers <<<<<<<<<<<<<<<<<<<<<<<<<<<<
     private setupBinding() {
       this.socket.on('error', (err) => {      
-        this.log.debug('[Network] Error: ', err);         
+        this.log.error('[Network] Error: ', err);         
       });
 
       this.socket.on('close', () => {      
@@ -121,7 +121,7 @@ export class NetworkEngine {
         if (stringData.includes('~MONITORING,5,1')) {  //Processor aknowledges monitoring command.
           if (this.status === ComState.Establishing) { //Lets mark connection stable.
             this.status = ComState.Ready;
-            this.log.debug('[Network] Monitoring Query Acknowledged');
+            this.log.info('[Network] Connected & Monitoring Query Acknowledged');
             this.fireDidConnectCallbacks(); //Fire Callbacks            
             this.startPingWatchdog(); //Start the verification cycle to see if we should ping on traffic silence
             this.padTheDog(); //Lets wake the watchdog (Falg)

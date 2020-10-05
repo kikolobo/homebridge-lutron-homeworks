@@ -17,7 +17,8 @@
     Port: <input type="text" id="port" value=""> <br>
     Username: <input type="text" id="username" value=""> <br>
     Password: <input type="text" id="password" value=""> <br>
-    Device name should include Area: <input type="checkbox" id="includeAreaName" checked="true"><br><br>
+    Device name should include Area? <input type="checkbox" id="includeAreaName" checked="true"><br><br>
+    Config name changes also changes HK? <input type="checkbox" id="updateHomeKitName" checked="true"><br><br>
 
     
 
@@ -67,7 +68,8 @@ function parseXML(text)
             "host": document.getElementById("host").value,
             "apiPort": document.getElementById("port").value,
             "username": document.getElementById("username").value,
-            "password": document.getElementById("password").value,                        
+            "password": document.getElementById("password").value,
+            "updateHomeKitName": document.getElementById("updateHomeKitName").value,
             "devices": [],
             "platform": "Homeworks",
         };

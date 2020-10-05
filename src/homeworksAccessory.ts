@@ -10,7 +10,7 @@ interface SetLutronBrightnessCallback { (value: number, isDimmable:boolean, acce
  */
 export class HomeworksAccesory {
   private service: Service;
-  public setLutronBrightnessCallback? : SetLutronBrightnessCallback;
+  public lutronBrightnessChangeCallback? : SetLutronBrightnessCallback;
 
   public dimmerState = {
     On: false,
@@ -101,7 +101,7 @@ export class HomeworksAccesory {
   }
 
   //*************************************
-  //* HomeBridge Delegates 
+  //* HomeBridge Delegates (Binds)
   
   /**
    * Handle the "SET/GET" ON requests from HomeKit
@@ -122,10 +122,13 @@ export class HomeworksAccesory {
     } else {
       this.dimmerState.Brightness = 0;
     }
-    this.service.updateCharacteristic(this.platform.Characteristic.Brightness, this.dimmerState.Brightness);
+
+    if (this.getIsDimmable() === false) { //If we are not dimmable. Assume 100% brightness on on state.
+      this.service.updateCharacteristic(this.platform.Characteristic.Brightness, this.dimmerState.Brightness);
+    }
     
-    if (this.setLutronBrightnessCallback) {
-      this.setLutronBrightnessCallback(this.dimmerState.Brightness, isDimmable, this);
+    if (this.lutronBrightnessChangeCallback) {
+      this.lutronBrightnessChangeCallback(this.dimmerState.Brightness, isDimmable, this);
     }
 
     this.platform.log.debug('[Accesory][setOn] %s [name: %s|dim: %s]', this.dimmerState.On, this._name, this._dimmable);
@@ -172,8 +175,8 @@ export class HomeworksAccesory {
     const targetBrightnessVal = targetValue as number;        
     this.dimmerState.Brightness = targetBrightnessVal;
 
-    if (this.setLutronBrightnessCallback) {
-      this.setLutronBrightnessCallback(targetBrightnessVal, this.getIsDimmable(), this); 
+    if (this.lutronBrightnessChangeCallback) {
+      this.lutronBrightnessChangeCallback(targetBrightnessVal, this.getIsDimmable(), this); 
     }
         
 
@@ -181,15 +184,14 @@ export class HomeworksAccesory {
   }
 
   //*************************************
-  //* Accesory Interface 
+  //* Accesory Callbacks
 
   /**
-   * Called from platform when we need to update Homekit
+   * Called from processor when we need to update Homekit
    * With new values from processor. (set externally)
    */
-  
   public updateBrightness(targetBrightnessVal: CharacteristicValue) { 
-    if (targetBrightnessVal === this.dimmerState.Brightness) {      
+    if (targetBrightnessVal === this.dimmerState.Brightness) { //If the value is the same. Ignore to save network traffic.
       return; 
     }
 

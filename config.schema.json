@@ -1,8 +1,8 @@
 {
   "pluginAlias": "Homeworks",
   "pluginType": "platform",
-  "headerDisplay": "Processor and Load Options",
-  "footerDisplay": "Please verify your integrationIDs in your database XML file",
+  "headerDisplay": "Processor and Lights",
+  "footerDisplay": "Please verify your integrationIDs from your database XML file",
   "singular": false,
   "schema": {
     "type": "object",
@@ -15,6 +15,8 @@
         "apiPort": {
         "type": "integer",
         "title": "Port",
+        "maxLength": 5,
+        "pattern": "^[0-9]*$",
         "placeholder": "23",
         "description": "Processor Port No."
       },
@@ -28,7 +30,7 @@
       },  
       "devices": {
         "type": "array",
-        "title": "Lights",
+        "title": "Devices",
         "description": "Light Directory",
         "items": {
           "type": "object",
@@ -41,13 +43,14 @@
             },
             "integrationID": {
               "type": "string",
-              "title": "Integration ID No.",
+              "title": "Integration ID",
               "required": true,
               "placeholder": "70"
             },
             "isDimmable": {
               "type": "boolean",
-              "title": "Is it Dimmable"
+              "title": "Is dimmable",
+              "default": true
             }            
           }
         }
