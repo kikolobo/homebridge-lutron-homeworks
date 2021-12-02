@@ -41,7 +41,7 @@ export class HomeworksAccesory {
       .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Homebridge')
       .setCharacteristic(this.platform.Characteristic.Model, 'Homeworks Plugin')
       .setCharacteristic(this.platform.Characteristic.SerialNumber, 'n/a')
-      .setCharacteristic(this.platform.Characteristic.FirmwareRevision, 0.2);
+      // .setCharacteristic(this.platform.Characteristic.FirmwareRevision, '0.2');
 
     //Assign HK Service
     this.service = this.accessory.getService(this.platform.Service.Lightbulb) || this.accessory.addService(this.platform.Service.Lightbulb);
