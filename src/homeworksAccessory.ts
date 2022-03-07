@@ -20,6 +20,7 @@ export class HomeworksAccesory {
   private _name;
   private _integrationId;
   private _UUID;
+  private _deviceType: string;
   private _dimmable = true;
   
   constructor(
@@ -27,6 +28,7 @@ export class HomeworksAccesory {
     private readonly accessory: PlatformAccessory,
     private readonly uuid: string,
     private readonly integrationId: string,
+    private readonly deviceType: string,
     private readonly dimmable: boolean,
   ) {
     
@@ -34,6 +36,7 @@ export class HomeworksAccesory {
     this._name = accessory.context.device.name;
     this._UUID = uuid;
     this._integrationId = integrationId;
+    this._deviceType = deviceType || 'light';
     this._dimmable = dimmable;
 
     //Set Info
