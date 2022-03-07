@@ -45,3 +45,25 @@ https://github.com/kikolobo/homebridge-lutron-homeworks/tree/master/LutronXML_Pa
 More info on the extraction process here:
 https://www.lutron.com/TechnicalDocumentLibrary/HWQS_XML_Extraction_FAQ.pdf
 
+## WebStorm/IntelliJ Setup
+
+
+Start at the root of where this plugin will be installed
+* ```git clone https://github.com/nfarina/homebridge.git```
+
+    This installs a local homebridge for testing
+* ```cd homebridge```
+* ```npm install```
+* ```npm install homebridge-config-ui-x ```
+* ```npm build```
+* ```mkdir config```
+* ```cd config```
+* Create a default ```config.json``` in the current directory. See homebridge docs for details
+* ```cd ..\..```
+* ```git clone https://github.com/XXX/homebridge-lutron-homeworks.git```
+* ```npm install```
+* ```npm build```
+* Start Webstorm and open the ```homebridge-lutron-homeworks``` directory as a project
+* Create a run/debug configuration that looks like: ![img_1.png](img_1.png)
+
+You're good to go!
