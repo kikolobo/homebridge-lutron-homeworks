@@ -16,10 +16,10 @@ export class HomeworksAccessory {
   public _dimmerState = {
     On: false,
     Brightness: 0,
-    PositionState: 2
+    PositionState: 2,
   }
 
-  private _name;
+  private readonly _name;
 
   constructor(
     private readonly _platform: HomeworksPlatform,
@@ -38,11 +38,12 @@ export class HomeworksAccessory {
     this._accessory.getService(this._platform.Service.AccessoryInformation)!
       .setCharacteristic(this._platform.Characteristic.Manufacturer, 'Homebridge')
       .setCharacteristic(this._platform.Characteristic.Model, 'Homeworks Plugin')
-      .setCharacteristic(this._platform.Characteristic.SerialNumber, 'n/a')
-      // .setCharacteristic(this.platform.Characteristic.FirmwareRevision, '0.2');
+      .setCharacteristic(this._platform.Characteristic.SerialNumber, 'n/a');
+    // .setCharacteristic(this.platform.Characteristic.FirmwareRevision, '0.2');
 
     if (this._deviceType === 'shade') {
-      this._service = this._accessory.getService(this._platform.Service.WindowCovering) || this._accessory.addService(this._platform.Service.WindowCovering);
+      this._service = this._accessory.getService(this._platform.Service.WindowCovering)
+        || this._accessory.addService(this._platform.Service.WindowCovering);
       this._service.setCharacteristic(this._platform.Characteristic.Name, _accessory.context.device.name);
 
       //  Current position of the shade
@@ -65,7 +66,8 @@ export class HomeworksAccessory {
 
     } else {
       //Assign HK Service
-      this._service = this._accessory.getService(this._platform.Service.Lightbulb) || this._accessory.addService(this._platform.Service.Lightbulb);
+      this._service = this._accessory.getService(this._platform.Service.Lightbulb)
+        || this._accessory.addService(this._platform.Service.Lightbulb);
       //Set Characteristic Name
       this._service.setCharacteristic(this._platform.Characteristic.Name, _accessory.context.device.name);
 
@@ -74,7 +76,7 @@ export class HomeworksAccessory {
         .on('set', this.setOn.bind(this))                // SET - bind to the `setOn` method below
         .on('get', this.getOn.bind(this));               // GET - bind to the `getOn` method below
       // register handlers for the Brightness Characteristic
-      if (_dimmable === true) {
+      if (_dimmable) {
         this._service.getCharacteristic(this._platform.Characteristic.Brightness)
           .on('set', this.setBrightness.bind(this))       // SET - bind to the 'setBrightness` method below
           .on('get', this.getBrightness.bind(this));      // GET - bind to the 'getBrightness` method below
@@ -144,7 +146,7 @@ export class HomeworksAccessory {
       this._dimmerState.Brightness = 0;
     }
 
-    if (this.getIsDimmable() === false) { //If we are not dimmable. Assume 100% brightness on on state.
+    if (!this.getIsDimmable()) { //If we are not dimmable. Assume 100% brightness on on state.
       this._service.updateCharacteristic(this._platform.Characteristic.Brightness, this._dimmerState.Brightness);
     }
     
@@ -160,7 +162,7 @@ export class HomeworksAccessory {
   private getOn(callback: CharacteristicGetCallback) {
     const isOn = this._dimmerState.On;
 
-    if (isOn === true) {
+    if (isOn) {
       this._platform.log.debug('[Accessory][getOn] %s is ON', this.getName());
     } else {
       this._platform.log.debug('[Accessory][getOn] %s is OFF', this.getName());
