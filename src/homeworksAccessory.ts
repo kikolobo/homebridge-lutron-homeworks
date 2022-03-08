@@ -221,7 +221,7 @@ export class HomeworksAccessory {
 
   private setCurrentPosition(targetValue: CharacteristicValue, callback: CharacteristicSetCallback) {
 
-    this.platform.log.debug('[Accessory] Set CurrentPosition -> %i %s', targetValue, this.getName());
+    this.platform.log.info('[Accessory] Set CurrentPosition -> %i %s', targetValue, this.getName());
 
     if (targetValue === this.dimmerState.Brightness) {
       callback(null);
@@ -252,7 +252,7 @@ export class HomeworksAccessory {
 
   private setTargetPosition(targetValue: CharacteristicValue, callback: CharacteristicSetCallback) {
 
-    this.platform.log.debug('[Accessory] Set TargetPosition -> %i %s', targetValue, this.getName());
+    this.platform.log.info('[Accessory] Set TargetPosition -> %i %s', targetValue, this.getName());
 
     if (targetValue === this.dimmerState.Brightness) {
       callback(null);
@@ -274,16 +274,14 @@ export class HomeworksAccessory {
    */
 
   private getPositionState(callback: CharacteristicGetCallback) {
-    const brightness = this.dimmerState.Brightness;
-
-    this.platform.log.info('[Accessory] Get PositionState -> %i %s', brightness, this._name);
+    this.platform.log.info('[Accessory] Get PositionState -> %i %s', this.dimmerState.PositionState, this._name);
 
     callback(null, this.dimmerState.PositionState); //error,value
   }
 
   private setPositionState(targetValue: CharacteristicValue, callback: CharacteristicSetCallback) {
 
-    this.platform.log.debug('[Accessory] Set PositionState -> %i %s', targetValue, this.getName());
+    this.platform.log.info('[Accessory] Set PositionState -> %i %s', targetValue, this.getName());
 
     //  Don't know what to do here.
     callback(null); // null or error
@@ -296,12 +294,12 @@ export class HomeworksAccessory {
    * Called from processor when we need to update Homekit
    * With new values from processor. (set externally)
    */
-  public updateBrightness(targetBrightnessVal: CharacteristicValue) { 
+  public updateBrightness(targetBrightnessVal: CharacteristicValue) {
+    this.platform.log.info('[Accessory][updateBrightness] to %i for %s', targetBrightnessVal, this._name);
+
     if (targetBrightnessVal === this.dimmerState.Brightness) { //If the value is the same. Ignore to save network traffic.
       return; 
     }
-
-    this.platform.log.debug('[Accessory][updateBrightness] to %i for %s', targetBrightnessVal, this._name);
 
     if (targetBrightnessVal > 0) {
       this.dimmerState.On = true;
