@@ -1,14 +1,14 @@
 import { Service, PlatformAccessory, CharacteristicValue, CharacteristicSetCallback, CharacteristicGetCallback } from 'homebridge';
 import { HomeworksPlatform } from './platform';
-interface SetLutronBrightnessCallback { (value: number, isDimmable:boolean, accesory:HomeworksAccesory): void }
+interface SetLutronBrightnessCallback { (value: number, isDimmable:boolean, Accessory:HomeworksAccessory): void }
 
 
 //*************************************
 /**
- * HomeworksAccesory
+ * HomeworksAccessory
  * An instance of this class is created for each accessory your platform registers
  */
-export class HomeworksAccesory {
+export class HomeworksAccessory {
   private service: Service;
   public lutronBrightnessChangeCallback? : SetLutronBrightnessCallback;
 
@@ -46,22 +46,38 @@ export class HomeworksAccesory {
       .setCharacteristic(this.platform.Characteristic.SerialNumber, 'n/a')
       // .setCharacteristic(this.platform.Characteristic.FirmwareRevision, '0.2');
 
-    //Assign HK Service
-    this.service = this.accessory.getService(this.platform.Service.Lightbulb) || this.accessory.addService(this.platform.Service.Lightbulb);
-    //Set Characteristic Name
-    this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.name);
+    if (this._deviceType === 'shade') {
+      this.service = this.accessory.getService(this.platform.Service.WindowCovering) || this.accessory.addService(this.platform.Service.WindowCovering);
+      this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.name);
 
-    // register handlers for the On/Off Characteristic (minimum for lightbulb)
-    this.service.getCharacteristic(this.platform.Characteristic.On)
-      .on('set', this.setOn.bind(this))                // SET - bind to the `setOn` method below
-      .on('get', this.getOn.bind(this));               // GET - bind to the `getOn` method below
+      this.service.getCharacteristic(this.platform.Characteristic.On)
+        .on('set', this.setOn.bind(this))                // SET - bind to the `setOn` method below
+        .on('get', this.getOn.bind(this));               // GET - bind to the `getOn` method below
 
-    // register handlers for the Brightness Characteristic
-    if (dimmable === true) {      
-      this.service.getCharacteristic(this.platform.Characteristic.Brightness)        
-        .on('set', this.setBrightness.bind(this))       // SET - bind to the 'setBrightness` method below
-        .on('get', this.getBrightness.bind(this));      // GET - bind to the 'getBrightness` method below
-    } 
+      // register handlers for the Brightness Characteristic
+      if (dimmable === true) {
+        this.service.getCharacteristic(this.platform.Characteristic.Brightness)
+          .on('set', this.setBrightness.bind(this))       // SET - bind to the 'setBrightness` method below
+          .on('get', this.getBrightness.bind(this));      // GET - bind to the 'getBrightness` method below
+      }
+
+    } else {
+      //Assign HK Service
+      this.service = this.accessory.getService(this.platform.Service.Lightbulb) || this.accessory.addService(this.platform.Service.Lightbulb);
+      //Set Characteristic Name
+      this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.name);
+
+      // register handlers for the On/Off Characteristic (minimum for lightbulb)
+      this.service.getCharacteristic(this.platform.Characteristic.On)
+        .on('set', this.setOn.bind(this))                // SET - bind to the `setOn` method below
+        .on('get', this.getOn.bind(this));               // GET - bind to the `getOn` method below
+      // register handlers for the Brightness Characteristic
+      if (dimmable === true) {
+        this.service.getCharacteristic(this.platform.Characteristic.Brightness)
+          .on('set', this.setBrightness.bind(this))       // SET - bind to the 'setBrightness` method below
+          .on('get', this.getBrightness.bind(this));      // GET - bind to the 'getBrightness` method below
+      }
+    }
   }
 
   //*************************************
@@ -105,7 +121,7 @@ export class HomeworksAccesory {
 
   //*************************************
   //* HomeBridge Delegates (Binds)
-  
+
   /**
    * Handle the "SET/GET" ON requests from HomeKit
    */
@@ -134,7 +150,7 @@ export class HomeworksAccesory {
       this.lutronBrightnessChangeCallback(this.dimmerState.Brightness, isDimmable, this);
     }
 
-    this.platform.log.debug('[Accesory][setOn] %s [name: %s|dim: %s]', this.dimmerState.On, this._name, this._dimmable);
+    this.platform.log.debug('[Accessory][setOn] %s [name: %s|dim: %s]', this.dimmerState.On, this._name, this._dimmable);
 
     callback(null);
   }
@@ -145,9 +161,9 @@ export class HomeworksAccesory {
     const isOn = this.dimmerState.On;
 
     if (isOn === true) {
-      this.platform.log.debug('[Accesory][getOn] %s is ON', this.getName());
+      this.platform.log.debug('[Accessory][getOn] %s is ON', this.getName());
     } else {
-      this.platform.log.debug('[Accesory][getOn] %s is OFF', this.getName());
+      this.platform.log.debug('[Accessory][getOn] %s is OFF', this.getName());
     }
     
     callback(null, isOn); //error,value
@@ -160,7 +176,7 @@ export class HomeworksAccesory {
   private getBrightness(callback: CharacteristicGetCallback) {    
     const brightness = this.dimmerState.Brightness;
 
-    this.platform.log.debug('[Accesory] Get Characteristic Brightness -> %i %s', brightness, this._name);
+    this.platform.log.debug('[Accessory] Get Characteristic Brightness -> %i %s', brightness, this._name);
     
     callback(null, brightness); //error,value
   }
@@ -173,7 +189,7 @@ export class HomeworksAccesory {
       return;
     }
     
-    this.platform.log.debug('[Accesory] Set Characteristic Brightness -> %i %s', targetValue, this.getName());
+    this.platform.log.debug('[Accessory] Set Characteristic Brightness -> %i %s', targetValue, this.getName());
 
     const targetBrightnessVal = targetValue as number;        
     this.dimmerState.Brightness = targetBrightnessVal;
@@ -187,7 +203,7 @@ export class HomeworksAccesory {
   }
 
   //*************************************
-  //* Accesory Callbacks
+  //* Accessory Callbacks
 
   /**
    * Called from processor when we need to update Homekit
@@ -198,7 +214,7 @@ export class HomeworksAccesory {
       return; 
     }
 
-    this.platform.log.debug('[Accesory][updateBrightness] to %i for %s', targetBrightnessVal, this._name);
+    this.platform.log.debug('[Accessory][updateBrightness] to %i for %s', targetBrightnessVal, this._name);
 
     if (targetBrightnessVal > 0) {
       this.dimmerState.On = true;

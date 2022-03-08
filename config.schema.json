@@ -35,7 +35,7 @@
         "items": {
           "type": "object",
           "properties": {
-            "devicetype": {
+            "deviceType": {
               "type": "string",
               "title": "Device Type",
               "oneOf":
