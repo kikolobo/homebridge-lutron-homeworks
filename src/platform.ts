@@ -165,7 +165,8 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
 
         this.log.info('[Platform] Registering: %s as %s Dimmable: %s', loadedAccessory.displayName, confDevice.name, isDimmable);
         // eslint-disable-next-line max-len
-        const hwa = new HomeworksAccessory(this, loadedAccessory, loadedAccessory.UUID, confDevice.integrationID, confDevice.deviceType, isDimmable);
+        const hwa =
+          new HomeworksAccessory(this, loadedAccessory, loadedAccessory.UUID, confDevice);
         this.homeworksAccessories.push(hwa);
         hwa.lutronBrightnessChangeCallback = brightnessChangeCallback;
         allAddedAccesories.push(loadedAccessory);

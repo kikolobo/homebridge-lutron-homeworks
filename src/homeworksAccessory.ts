@@ -1,5 +1,7 @@
 import { Service, PlatformAccessory, CharacteristicValue, CharacteristicSetCallback, CharacteristicGetCallback } from 'homebridge';
 import { HomeworksPlatform } from './platform';
+import { ConfigDevice} from './Schemas/device';
+
 interface SetLutronBrightnessCallback { (value: number, isDimmable:boolean, Accessory:HomeworksAccessory): void }
 
 
@@ -25,14 +27,13 @@ export class HomeworksAccessory {
     private readonly _platform: HomeworksPlatform,
     private readonly _accessory: PlatformAccessory,
     private readonly _uuid: string,
-    private readonly _integrationId: string,
-    private readonly _deviceType: string,
-    private readonly _dimmable: boolean,
+    private readonly _config: ConfigDevice,
   ) {
     
     //Assign local variables
     this._name = _accessory.context.device.name;
-    this._deviceType = this._deviceType || 'light';
+    //  Default is light
+    this._config.deviceType = this._config.deviceType || 'light';
 
     //Set Info
     this._accessory.getService(this._platform.Service.AccessoryInformation)!
@@ -41,7 +42,7 @@ export class HomeworksAccessory {
       .setCharacteristic(this._platform.Characteristic.SerialNumber, 'n/a');
     // .setCharacteristic(this.platform.Characteristic.FirmwareRevision, '0.2');
 
-    if (this._deviceType === 'shade') {
+    if (this._config.deviceType === 'shade') {
       this._service = this._accessory.getService(this._platform.Service.WindowCovering)
         || this._accessory.addService(this._platform.Service.WindowCovering);
       this._service.setCharacteristic(this._platform.Characteristic.Name, _accessory.context.device.name);
@@ -76,7 +77,7 @@ export class HomeworksAccessory {
         .on('set', this.setOn.bind(this))                // SET - bind to the `setOn` method below
         .on('get', this.getOn.bind(this));               // GET - bind to the `getOn` method below
       // register handlers for the Brightness Characteristic
-      if (_dimmable) {
+      if (this._config.isDimmable) {
         this._service.getCharacteristic(this._platform.Characteristic.Brightness)
           .on('set', this.setBrightness.bind(this))       // SET - bind to the 'setBrightness` method below
           .on('get', this.getBrightness.bind(this));      // GET - bind to the 'getBrightness` method below
@@ -92,7 +93,7 @@ export class HomeworksAccessory {
    * getIntegrationId() 
    */
   public getIntegrationId() {
-    return this._integrationId;
+    return this._config.integrationID;
   }
 
   /**
@@ -120,7 +121,7 @@ export class HomeworksAccessory {
    * getIsDimable()
    */
   public getIsDimmable() {
-    return this._dimmable;
+    return this._config.isDimmable;
   }
 
   //*************************************
@@ -154,7 +155,7 @@ export class HomeworksAccessory {
       this.lutronBrightnessChangeCallback(this._dimmerState.Brightness, isDimmable, this);
     }
 
-    this._platform.log.debug('[Accessory][setOn] %s [name: %s|dim: %s]', this._dimmerState.On, this._name, this._dimmable);
+    this._platform.log.debug('[Accessory][setOn] %s [name: %s|dim: %s]', this._dimmerState.On, this._name, this.getIsDimmable());
 
     callback(null);
   }
@@ -162,12 +163,8 @@ export class HomeworksAccessory {
   private getOn(callback: CharacteristicGetCallback) {
     const isOn = this._dimmerState.On;
 
-    if (isOn) {
-      this._platform.log.debug('[Accessory][getOn] %s is ON', this.getName());
-    } else {
-      this._platform.log.debug('[Accessory][getOn] %s is OFF', this.getName());
-    }
-    
+    this._platform.log.debug('[Accessory][getOn] %s is %s', this.getName(), isOn ? 'ON' : 'OFF');
+
     callback(null, isOn); //error,value
   }    
 
