@@ -11,7 +11,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
   private configuration: Configuration = {devices:[], apiPort:23, host:'127.0.0.1', username:'', password:''};
   private readonly engine: NetworkEngine;
   private readonly cachedPlatformAccessories: PlatformAccessory[] = [];
-  private readonly homeworksAccesories: HomeworksAccessory[] = [];
+  private readonly homeworksAccessories: HomeworksAccessory[] = [];
 
   constructor(
     public readonly log: Logger,
@@ -79,7 +79,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
           const deviceId = splittedMessage[1];  //Assign values from splitted message
           const brigthness = Number(splittedMessage[splittedMessage.length-1]);
           const uuid = this.api.hap.uuid.generate(deviceId);
-          const targetDevice = this.homeworksAccesories.find(accessory => accessory.getUUID() === uuid);
+          const targetDevice = this.homeworksAccessories.find(accessory => accessory.getUUID() === uuid);
         
           if (targetDevice) { //If we find a device, it means we are observing it and need the value.
             this.log.debug('[Platform][EngineCallback] Set: %s to: %i', targetDevice.getName(), brigthness);
@@ -93,7 +93,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
     // * Will be called eveytime we connect to the processor (socket)
     const connectedCallback = (engine: NetworkEngine) : void => {      
       //When we connect. We want to get the latest state for the lights. So we issue a query
-      for (const accessory of this.homeworksAccesories) {
+      for (const accessory of this.homeworksAccessories) {
         this.log.debug('[Platform] Requesting updates for:', accessory.getName());
         const command = `?OUTPUT,${accessory.getIntegrationId()},1`;
         engine.send(command);        
@@ -166,7 +166,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
 
         this.log.info('[Platform] Registering: %s as %s Dimmable: %s', loadedAccessory.displayName, confDevice.name, isDimmable);
         const hwa = new HomeworksAccessory(this, loadedAccessory, loadedAccessory.UUID, confDevice.integrationID, confDevice.deviceType, isDimmable);
-        this.homeworksAccesories.push(hwa);
+        this.homeworksAccessories.push(hwa);
         hwa.lutronBrightnessChangeCallback = brightnessChangeCallback;
         allAddedAccesories.push(loadedAccessory);
       } else {

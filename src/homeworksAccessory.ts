@@ -15,6 +15,7 @@ export class HomeworksAccessory {
   public dimmerState = {
     On: false,
     Brightness: 0,
+    PositionState: 2
   }
 
   private _name;
@@ -50,16 +51,23 @@ export class HomeworksAccessory {
       this.service = this.accessory.getService(this.platform.Service.WindowCovering) || this.accessory.addService(this.platform.Service.WindowCovering);
       this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.name);
 
-      this.service.getCharacteristic(this.platform.Characteristic.On)
-        .on('set', this.setOn.bind(this))                // SET - bind to the `setOn` method below
-        .on('get', this.getOn.bind(this));               // GET - bind to the `getOn` method below
+      //  Current position of the shade
+      this.service.getCharacteristic(this.platform.Characteristic.CurrentPosition)
+        .on('set', this.setCurrentPosition.bind(this))
+        .on('get', this.getCurrentPosition.bind(this));
 
-      // register handlers for the Brightness Characteristic
-      if (dimmable === true) {
-        this.service.getCharacteristic(this.platform.Characteristic.Brightness)
-          .on('set', this.setBrightness.bind(this))       // SET - bind to the 'setBrightness` method below
-          .on('get', this.getBrightness.bind(this));      // GET - bind to the 'getBrightness` method below
-      }
+      //  Target position of the shade
+      this.service.getCharacteristic(this.platform.Characteristic.TargetPosition)
+        .on('set', this.setTargetPosition.bind(this))
+        .on('get', this.getTargetPosition.bind(this));
+
+      //  Current status of shade motion
+      //  TODO: Is this ever invoked?
+      this.service.getCharacteristic(this.platform.Characteristic.PositionState)
+        .on('set', this.setPositionState.bind(this))
+        .on('get', this.getPositionState.bind(this));
+
+      this.dimmerState.PositionState = this.platform.Characteristic.PositionState.STOPPED;
 
     } else {
       //Assign HK Service
@@ -155,8 +163,6 @@ export class HomeworksAccessory {
     callback(null);
   }
 
-
-
   private getOn(callback: CharacteristicGetCallback) {
     const isOn = this.dimmerState.On;
 
@@ -181,7 +187,6 @@ export class HomeworksAccessory {
     callback(null, brightness); //error,value
   }
 
-
   private setBrightness(targetValue: CharacteristicValue, callback: CharacteristicSetCallback) {
 
     if (targetValue === this.dimmerState.Brightness) {
@@ -199,6 +204,88 @@ export class HomeworksAccessory {
     }
         
 
+    callback(null); // null or error
+  }
+
+  /**
+   * Handle the "SET/GET" CurrentPosition requests from HomeKit
+   */
+
+  private getCurrentPosition(callback: CharacteristicGetCallback) {
+    const brightness = this.dimmerState.Brightness;
+
+    this.platform.log.info('[Accessory] Get CurrentPosition -> %i %s', brightness, this._name);
+
+    callback(null, brightness); //error,value
+  }
+
+  private setCurrentPosition(targetValue: CharacteristicValue, callback: CharacteristicSetCallback) {
+
+    this.platform.log.debug('[Accessory] Set CurrentPosition -> %i %s', targetValue, this.getName());
+
+    if (targetValue === this.dimmerState.Brightness) {
+      callback(null);
+      return;
+    }
+
+    const targetBrightnessVal = targetValue as number;
+    this.dimmerState.Brightness = targetBrightnessVal;
+
+    if (this.lutronBrightnessChangeCallback) {
+      this.lutronBrightnessChangeCallback(targetBrightnessVal, this.getIsDimmable(), this);
+    }
+
+    callback(null); // null or error
+  }
+
+  /**
+   * Handle the "SET/GET" CurrentPosition requests from HomeKit
+   */
+
+  private getTargetPosition(callback: CharacteristicGetCallback) {
+    const brightness = this.dimmerState.Brightness;
+
+    this.platform.log.info('[Accessory] Get TargetPosition -> %i %s', brightness, this._name);
+
+    callback(null, brightness); //error,value
+  }
+
+  private setTargetPosition(targetValue: CharacteristicValue, callback: CharacteristicSetCallback) {
+
+    this.platform.log.debug('[Accessory] Set TargetPosition -> %i %s', targetValue, this.getName());
+
+    if (targetValue === this.dimmerState.Brightness) {
+      callback(null);
+      return;
+    }
+
+    const targetBrightnessVal = targetValue as number;
+    this.dimmerState.Brightness = targetBrightnessVal;
+
+    if (this.lutronBrightnessChangeCallback) {
+      this.lutronBrightnessChangeCallback(targetBrightnessVal, this.getIsDimmable(), this);
+    }
+
+    callback(null); // null or error
+  }
+
+  /**
+   * Handle the "SET/GET" CurrentPosition requests from HomeKit
+   */
+
+  private getPositionState(callback: CharacteristicGetCallback) {
+    const brightness = this.dimmerState.Brightness;
+
+    this.platform.log.info('[Accessory] Get PositionState -> %i %s', brightness, this._name);
+
+    callback(null, this.dimmerState.PositionState); //error,value
+  }
+
+  private setPositionState(targetValue: CharacteristicValue, callback: CharacteristicSetCallback) {
+
+    this.platform.log.debug('[Accessory] Set PositionState -> %i %s', targetValue, this.getName());
+
+    //  Don't know what to do here.
     callback(null); // null or error
   }
 
@@ -226,5 +313,4 @@ export class HomeworksAccessory {
     this.service.updateCharacteristic(this.platform.Characteristic.On, this.dimmerState.On);
     this.service.updateCharacteristic(this.platform.Characteristic.Brightness, this.dimmerState.Brightness);
   }
-
 }
