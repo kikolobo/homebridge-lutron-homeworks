@@ -41,8 +41,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
    * Loads and parses de user config.json for this platform
    */
   private loadUserConfiguration() {
-    const obj = JSON.parse(JSON.stringify(this.config));
-    this.configuration = obj;      
+    this.configuration = JSON.parse(JSON.stringify(this.config));
     this.log.debug('[Platform] User Configuration Loaded.');
   }
 
@@ -64,13 +63,13 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
           continue; 
         }
        
-        if (singleMessage.includes('~SYSTEM,6,') === true) { //This is considered a PONG reply.
+        if (singleMessage.includes('~SYSTEM,6,')) { //This is considered a PONG reply.
           this.log.debug('[platform][Pong] Received'); //TODO: Move to NETWORK Class (why waste cycles here)
           continue;
         }
 
-        if (singleMessage.includes('GLINK_DEVICE_SERIAL_NUM') !== true &&
-            singleMessage.includes('Device serial ') !== true) {
+        if (!singleMessage.includes('GLINK_DEVICE_SERIAL_NUM') &&
+            !singleMessage.includes('Device serial ')) {
           this.log.debug('[platform][traffic]', singleMessage);
         }
       
@@ -122,7 +121,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
     const brightnessChangeCallback = (value: number, isDimmable: boolean, accessory:HomeworksAccessory) : void => { //Callback from HK
       let fadeTime = '00:01';
       
-      if (isDimmable === false) {        
+      if (!isDimmable) {
         fadeTime = '00:00';
       }
       
@@ -165,6 +164,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
         
 
         this.log.info('[Platform] Registering: %s as %s Dimmable: %s', loadedAccessory.displayName, confDevice.name, isDimmable);
+        // eslint-disable-next-line max-len
         const hwa = new HomeworksAccessory(this, loadedAccessory, loadedAccessory.UUID, confDevice.integrationID, confDevice.deviceType, isDimmable);
         this.homeworksAccessories.push(hwa);
         hwa.lutronBrightnessChangeCallback = brightnessChangeCallback;
@@ -174,8 +174,8 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
       }            
     }
 
-    let toDelete: PlatformAccessory[] = [];
-    toDelete = this.diference(this.cachedPlatformAccessories, allAddedAccesories) as PlatformAccessory[];
+    const toDelete =
+      this.diference(this.cachedPlatformAccessories, allAddedAccesories) as PlatformAccessory[];
     if (toDelete.length > 0) {
       this.log.warn('[platform] Removing: %i accesories', toDelete.length);
       this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, toDelete);
