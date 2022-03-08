@@ -168,7 +168,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
         const hwa =
           new HomeworksAccessory(this, loadedAccessory, loadedAccessory.UUID, confDevice);
         this.homeworksAccessories.push(hwa);
-        hwa.lutronBrightnessChangeCallback = brightnessChangeCallback;
+        hwa.lutronLevelChangeCallback = brightnessChangeCallback;
         allAddedAccesories.push(loadedAccessory);
       } else {
         this.log.error('[platform][Error] Unable to load accessory: %s', confDevice.name);
