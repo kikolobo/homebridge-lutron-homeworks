@@ -27,6 +27,7 @@
             JSON Text will be created automatically below after loading the XML file.<br>Copy & Paste text to the JSON settings in HomeBridge. Replace the whole platform block that belongs to the Homeworks integration.
             <hr>
    
+    <div id="errors"> </div>
     <div id="output">  </div> 
     <script type="text/javascript">
         console.log("Here....");
@@ -34,6 +35,8 @@
 </body> 
   
 </html> 
+<script type='text/javascript' src='https://code.jquery.com/jquery-3.5.1.min.js'></script>
+<script type='text/javascript' src="https://cdn.rawgit.com/abdmob/x2js/master/xml2json.js"></script>
 
 <script type="text/javascript">	
 
@@ -56,14 +59,13 @@ function getFile() {
 
 function parseXML(text)
 {	
-    var txt = text.split("/>");
-    var out = "";
-    var i = 0;
-    var currentArea = "";
-    var fixtureName = ""
-    var integID = "";    
-    var FriendlyName = "";
-    var includeAreaName = document.getElementById("includeAreaName").checked;
+    var xmlText = $.parseXML(text)
+
+    var x2js = new X2JS();
+    var data = x2js.xml2json(xmlText);
+
+    var parsed = walkDBJson( data );
+
     var configObject = {
             "host": document.getElementById("host").value,
             "apiPort": document.getElementById("port").value,
@@ -74,57 +76,95 @@ function parseXML(text)
             "platform": "Homeworks",
         };
 
-    var deviceObjects = new Array();
-    var integrationIDs = new Array();
-    var duplicateFlag = false;
-
-    
-    for (i = 0; i < txt.length ;i++) {
-        if (txt[i] !== "") {
-            if (txt[i].includes("Area Name") === true) {
-                var tag = txt[i].split("\"");
-                currentArea = tag[1];
-            }
-            if (txt[i].includes("Output Name=") === true) {
-                var tag = txt[i].split("\"");                
-
-                fixtureName = tag[1].trim();
-                integID = tag[5].trim();
-
-                
-                if (integrationIDs.filter(integrationId => integrationId === integID).length > 0) {
-                    duplicateFlag = true;
-                }
-                
-                if (includeAreaName === true) {
-                    FriendlyName = currentArea + " " + fixtureName;
-                } else {
-                    FriendlyName = fixtureName;
-                }
-
-                out += currentArea + "  =  " +  fixtureName + "  [" + integID + "]  " + "  > " + FriendlyName + "\n";
-                
-                var device = {"name": FriendlyName,
-                    "integrationID": integID,
-                    "isDimmable": true};
-
-                integrationIDs.push(integID);
-                deviceObjects.push(device)
-            }            
-        }
-    }
-        
-    
-    configObject.devices = deviceObjects;
-    if (duplicateFlag === false) {
-        document.getElementById("output").innerHTML = sanitizeHTML(JSON.stringify(configObject,undefined, 4));
-    } else {
-       document.getElementById("output").innerHTML = "<p style='color:red'>ERROR: Multiple accessories are using the same Lutron IntegrationID. A unique ID is required.</br> Please edit your XML document to remove redundant devices.</p>";
-    }
-
+    configObject.devices = parsed;
+    document.getElementById("output").innerHTML = sanitizeHTML(JSON.stringify(configObject,undefined, 4));
 }
 
- function sanitizeHTML(text) {
+function noteError(txt) {
+    document.getElementById("errors").innerHTML = "<p style='color:red'>" + txt + "</p>";
+}
+
+//  Lutron's XML schema is not public so this is a best-guess. Also
+//  note that XML->JSON conversion is pretty wacko.
+//
+//  The parsed XML is an object with field:
+//      Project         object
+//
+//  The Project object has (among others) field:
+//      Areas.Area      Area or Area[]
+//
+//  The Area object has (among others) fields:
+//      _Name           string
+//      Outputs         Output or Output[]
+//      Areas           Area or Area[]
+//
+//  The Output object has (among others) fields:
+//      _Name           string
+//      _IntegrationID  string
+//      _OutputType     string
+//
+function walkDBJson(node) {
+    if (node.Project === undefined) {
+        noteError("Unable to parse: missing 'Project' field");
+        return [];
+    }
+
+    return walkAreas(node.Project.Areas.Area);
+}
+
+function walkAreas(areas) {
+    //  Areas is either a single area or an array
+    if (areas instanceof Array) {
+        var deviceList = [];
+        for(var area of areas) {
+            deviceList = deviceList.concat(walkArea(area));
+        }
+        return deviceList;
+    }
+
+    return walkArea( areas);
+}
+
+function walkArea(area) {
+    var deviceList = [];
+    if (area.Outputs !== '') {
+        var x = walkOutputs(area.Outputs.Output, area._Name);
+        deviceList = deviceList.concat(x);
+    }
+    if (area.Areas !== '') {
+        var x = walkAreas(area.Areas.Area);
+        deviceList = deviceList.concat(x);
+    }
+    return deviceList;
+}
+
+function walkOutputs(outputs, name) {
+    if (outputs instanceof Array) {
+        var deviceList = [];
+        for (output of outputs) {
+            deviceList.push( walkOutput( output, name));
+        }
+        return deviceList;
+    }
+
+    return walkOutput(outputs, name);
+}
+
+function walkOutput(output, name) {
+    var deviceName = output._Name;
+    if (document.getElementById("includeAreaName").checked) {
+        deviceName = name + " " + output._Name;
+    }
+    var device = { "name": deviceName,
+                    "integrationID": output._IntegrationID,
+                    "outputType": output._OutputType,
+                    "isDimmable": true};
+                    
+    return device;
+}
+
+
+function sanitizeHTML(text) {
   var element = document.createElement('div');
   element.innerText = text;
   return element.innerHTML;

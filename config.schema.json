@@ -35,6 +35,17 @@
         "items": {
           "type": "object",
           "properties": {
+            "deviceType": {
+              "type": "string",
+              "title": "Device Type",
+              "oneOf":
+              [
+                { "title": "Light", "enum": ["light"] },
+                { "title": "Shade", "enum": ["shade"] }
+              ],
+              "required": true,
+              "placeholder": "light"
+            },
             "name": {
               "type": "string",
               "title": "Light Name",

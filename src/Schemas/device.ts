@@ -14,6 +14,11 @@ export interface ConfigDevice {
     integrationID: string;
 
     /**
+     * Type of device
+     */
+    deviceType: string;
+
+    /**
      * Gets or sets a value that determines whether is dimmable 
      */
     isDimmable: boolean;    
