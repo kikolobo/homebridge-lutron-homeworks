@@ -95,7 +95,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
       //  NOTE: If the device is being updated elsewhere (like another app or switch) this
       //  value may be incorrect
       for (const accessory of this.homeworksAccessories) {
-        this.log.debug('[Platform] Requesting updates for:', accessory.getName());
+        this.log.debug('[Platform] Requesting level for:', accessory.getName());
         const command = `?OUTPUT,${accessory.getIntegrationId()},1`;
         engine.send(command);        
       }

@@ -86,6 +86,9 @@ export class HomeworksAccessory {
 
 }
 
+/**
+ *
+ */
 export class HomeworksLightAccessory extends HomeworksAccessory {
   private _service: Service;
 
@@ -235,13 +238,25 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
   }
 }
 
+/**
+ * HomeworksShadeAccessory covers the shade class of devices from Lutron.
+ *
+ * Output commands will  set the TargetPosition and automatically initiate the
+ * motion. The immediately reported status from Homeworks is the TargetPosition.
+ *
+ *  It appears that the end of the scrolling is indicated by an undocumented
+ * status ~OUTPUT,XXX,32,2,level
+ *
+ * Outside of this, no further status is reported. Worse, subsequent ?OUTPUT,x,1 polls
+ * will show this TargetPosition but nothing in between
+ */
 export class HomeworksShadeAccessory extends HomeworksAccessory {
   private _service: Service;
   public lutronLevelChangeCallback? : SetLutronLevelCallback;
 
-  public _dimmerState = {
-    On: false,
-    Brightness: 0,
+  public _shadeState = {
+    Position: 0,
+    TargetPosition: 0,
     PositionState: 2,
   }
 
@@ -268,12 +283,11 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
       .on('get', this.getTargetPosition.bind(this));
 
     //  Current status of shade motion
-    //  TODO: Is this ever invoked?
     this._service.getCharacteristic(this._platform.Characteristic.PositionState)
       .on('set', this.setPositionState.bind(this))
       .on('get', this.getPositionState.bind(this));
 
-    this._dimmerState.PositionState = this._platform.Characteristic.PositionState.STOPPED;
+    this._shadeState.PositionState = this._platform.Characteristic.PositionState.STOPPED;
   }
 
 
@@ -285,58 +299,61 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
    */
 
   private getCurrentPosition(callback: CharacteristicGetCallback) {
-    const brightness = this._dimmerState.Brightness;
 
-    this._platform.log.info('[Accessory][%s][getCurrentPosition] -> %i', this._name, brightness);
+    const position = this._shadeState.Position;
 
-    callback(null, brightness); //error,value
+    this._platform.log.info('[Accessory][%s][getCurrentPosition] -> %i', this._name, position);
+
+    callback(null, position); //error,value
   }
 
-  private setCurrentPosition(targetValue: CharacteristicValue, callback: CharacteristicSetCallback) {
+  private setCurrentPosition(position: CharacteristicValue, callback: CharacteristicSetCallback) {
 
-    this._platform.log.info('[Accessory][%s][setCurrentPosition] -> %i', this.getName(), targetValue);
+    this._platform.log.info('WTF [Accessory][%s][setCurrentPosition] -> %i', this.getName(), position);
 
-    if (targetValue === this._dimmerState.Brightness) {
+    const positionNumber = position as number;
+
+    //  If there is no movement, no change necessary
+    if (positionNumber === this._shadeState.Position) {
       callback(null);
       return;
     }
 
-    const targetBrightnessVal = targetValue as number;
-    this._dimmerState.Brightness = targetBrightnessVal;
+    this._shadeState.Position = positionNumber;
 
     if (this.lutronLevelChangeCallback) {
-      this.lutronLevelChangeCallback(targetBrightnessVal, false, this);
+      this.lutronLevelChangeCallback(this._shadeState.Position, false, this);
     }
 
     callback(null); // null or error
   }
 
   /**
-   * Handle the "SET/GET" CurrentPosition requests from HomeKit
+   * Handle the "SET/GET" TargetPosition requests from HomeKit
    */
 
   private getTargetPosition(callback: CharacteristicGetCallback) {
-    const brightness = this._dimmerState.Brightness;
 
-    this._platform.log.info('[Accessory][%s][getTargetPosition] -> %i', this._name, brightness);
+    this._platform.log.info('[Accessory][%s][getTargetPosition] -> %i', this._name, this._shadeState.TargetPosition);
 
-    callback(null, brightness); //error,value
+    callback(null, this._shadeState.TargetPosition); //error,value
   }
 
-  private setTargetPosition(targetValue: CharacteristicValue, callback: CharacteristicSetCallback) {
+  private setTargetPosition(targetPosition: CharacteristicValue, callback: CharacteristicSetCallback) {
+    this._platform.log.info('[Accessory][%s][setTargetPosition] -> %i', this.getName(), targetPosition);
 
-    this._platform.log.info('[Accessory][%s][setTargetPosition] -> %i', this.getName(), targetValue);
-
-    if (targetValue === this._dimmerState.Brightness) {
+    const targetPositionNumber = targetPosition as number;
+    if (targetPositionNumber === this._shadeState.TargetPosition) {
       callback(null);
       return;
     }
 
-    const targetBrightnessVal = targetValue as number;
-    this._dimmerState.Brightness = targetBrightnessVal;
+    //  Begin motion to the target level. We only set the target level and let reported status
+    //  set the current position
+    this._shadeState.TargetPosition = targetPositionNumber;
 
     if (this.lutronLevelChangeCallback) {
-      this.lutronLevelChangeCallback(targetBrightnessVal, false, this);
+      this.lutronLevelChangeCallback(this._shadeState.TargetPosition, false, this);
     }
 
     callback(null); // null or error
@@ -347,14 +364,15 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
    */
 
   private getPositionState(callback: CharacteristicGetCallback) {
-    this._platform.log.info('[Accessory][%s][getPositionState] -> %i', this._name, this._dimmerState.PositionState);
 
-    callback(null, this._dimmerState.PositionState); //error,value
+    this._platform.log.info('[Accessory][%s][getPositionState] -> %i', this._name, this._shadeState.PositionState);
+
+    callback(null, this._shadeState.PositionState); //error,value
   }
 
-  private setPositionState(targetValue: CharacteristicValue, callback: CharacteristicSetCallback) {
+  private setPositionState(targetState: CharacteristicValue, callback: CharacteristicSetCallback) {
 
-    this._platform.log.info('[Accessory][%s][setPositionState] -> %i', this.getName(), targetValue);
+    this._platform.log.info('WTF [Accessory][%s][setPositionState] -> %i', this.getName(), targetState);
 
     //  Don't know what to do here.
     callback(null); // null or error
@@ -370,18 +388,22 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
   public updateBrightness(targetBrightnessVal: CharacteristicValue) {
     this._platform.log.info('[Accessory][%s][updateBrightness] to %i', this._name, targetBrightnessVal);
 
-    if (targetBrightnessVal === this._dimmerState.Brightness) { //If the value is the same. Ignore to save network traffic.
+    const targetPositionNumber = targetBrightnessVal as number;
+
+    //  If there is no change, then there's nothing for us to do
+    if (targetPositionNumber === this._shadeState.Position) {
       return;
     }
 
-    if (targetBrightnessVal > 0) {
-      this._dimmerState.On = true;
-    } else if (targetBrightnessVal <= 0) {
-      this._dimmerState.On = false;
-    }
 
-    this._dimmerState.Brightness = targetBrightnessVal as number;
-    this._service.updateCharacteristic(this._platform.Characteristic.On, this._dimmerState.On);
-    this._service.updateCharacteristic(this._platform.Characteristic.Brightness, this._dimmerState.Brightness);
+    this._shadeState.Position = targetPositionNumber;
+    this._service.updateCharacteristic(this._platform.Characteristic.CurrentPosition, this._shadeState.Position);
+
+    if (this._shadeState.Position === this._shadeState.TargetPosition
+      && this._shadeState.PositionState != this._platform.Characteristic.PositionState.STOPPED) {
+
+      this._shadeState.PositionState = this._platform.Characteristic.PositionState.STOPPED;
+      this._service.updateCharacteristic(this._platform.Characteristic.PositionState, this._shadeState.PositionState);
+    }
   }
 }
