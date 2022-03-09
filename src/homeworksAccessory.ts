@@ -214,7 +214,7 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
 
   /**
    * Called from processor when we need to update Homekit
-   * With new values from processor. (set externally)
+   * With new values from processor.
    */
   public updateBrightness(targetBrightnessVal: CharacteristicValue) {
     this._platform.log.info('[Accessory][%s][updateBrightness] to %i', this._name, targetBrightnessVal);
@@ -276,120 +276,9 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
     this._dimmerState.PositionState = this._platform.Characteristic.PositionState.STOPPED;
   }
 
-  //*************************************
-  //* Class Getters
-  /**
-   * Handle the "GET" integrationId
-   * @example
-   * getIntegrationId()
-   */
-  public getIntegrationId() {
-    return this._config.integrationID;
-  }
-
-  /**
-   * Handle the "GET" name
-   * @example
-   * getName()
-   */
-  public getName() {
-    return this._name;
-  }
-
-  /**
-   * Handle the "GET" UUID
-   * @example
-   * getUUID()
-   */
-  public getUUID() {
-    return this._uuid;
-  }
-
-
-  /**
-   * Handle the "GET" is dimmable
-   * @example
-   * getIsDimable()
-   */
-  public getIsDimmable() {
-    return this._config.isDimmable;
-  }
 
   //*************************************
   //* HomeBridge Delegates (Binds)
-
-  /**
-   * Handle the "SET/GET" ON requests from HomeKit
-   */
-
-  private setOn(targetValue: CharacteristicValue, callback: CharacteristicSetCallback) {
-    const isDimmable = this.getIsDimmable();
-
-    if (targetValue === this._dimmerState.On) {
-      callback(null);
-      return;
-    }
-
-    this._dimmerState.On = targetValue as boolean;
-
-    if (targetValue === true) {
-      this._dimmerState.Brightness = 100;
-    } else {
-      this._dimmerState.Brightness = 0;
-    }
-
-    if (!this.getIsDimmable()) { //If we are not dimmable. Assume 100% brightness on on state.
-      this._service.updateCharacteristic(this._platform.Characteristic.Brightness, this._dimmerState.Brightness);
-    }
-
-    if (this.lutronLevelChangeCallback) {
-      this.lutronLevelChangeCallback(this._dimmerState.Brightness, isDimmable, this);
-    }
-
-    this._platform.log.debug('[Accessory][%s][setOn] [state: %s|dim: %s]', this._name, this._dimmerState.On, this.getIsDimmable());
-
-    callback(null);
-  }
-
-  private getOn(callback: CharacteristicGetCallback) {
-    const isOn = this._dimmerState.On;
-
-    this._platform.log.debug('[Accessory][%s][getOn] is %s', this.getName(), isOn ? 'ON' : 'OFF');
-
-    callback(null, isOn); //error,value
-  }
-
-  /**
-   * Handle the "SET/GET" Brightness requests from HomeKit
-   */
-
-  private getBrightness(callback: CharacteristicGetCallback) {
-    const brightness = this._dimmerState.Brightness;
-
-    this._platform.log.debug('[Accessory][%s][getBrightness] -> %i', this._name, brightness);
-
-    callback(null, brightness); //error,value
-  }
-
-  private setBrightness(targetValue: CharacteristicValue, callback: CharacteristicSetCallback) {
-
-    if (targetValue === this._dimmerState.Brightness) {
-      callback(null);
-      return;
-    }
-
-    this._platform.log.debug('[Accessory][%s][setBrightness] -> %i', this.getName(), targetValue);
-
-    const targetBrightnessVal = targetValue as number;
-    this._dimmerState.Brightness = targetBrightnessVal;
-
-    if (this.lutronLevelChangeCallback) {
-      this.lutronLevelChangeCallback(targetBrightnessVal, this.getIsDimmable(), this);
-    }
-
-
-    callback(null); // null or error
-  }
 
   /**
    * Handle the "SET/GET" CurrentPosition requests from HomeKit
@@ -416,7 +305,7 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
     this._dimmerState.Brightness = targetBrightnessVal;
 
     if (this.lutronLevelChangeCallback) {
-      this.lutronLevelChangeCallback(targetBrightnessVal, this.getIsDimmable(), this);
+      this.lutronLevelChangeCallback(targetBrightnessVal, false, this);
     }
 
     callback(null); // null or error
@@ -447,7 +336,7 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
     this._dimmerState.Brightness = targetBrightnessVal;
 
     if (this.lutronLevelChangeCallback) {
-      this.lutronLevelChangeCallback(targetBrightnessVal, this.getIsDimmable(), this);
+      this.lutronLevelChangeCallback(targetBrightnessVal, false, this);
     }
 
     callback(null); // null or error
