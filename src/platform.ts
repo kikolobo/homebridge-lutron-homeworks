@@ -92,6 +92,8 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
     // * Will be called eveytime we connect to the processor (socket)
     const connectedCallback = (engine: NetworkEngine) : void => {      
       //When we connect. We want to get the latest state for the lights. So we issue a query
+      //  NOTE: If the device is being updated elsewhere (like another app or switch) this
+      //  value may be incorrect
       for (const accessory of this.homeworksAccessories) {
         this.log.debug('[Platform] Requesting updates for:', accessory.getName());
         const command = `?OUTPUT,${accessory.getIntegrationId()},1`;
@@ -119,11 +121,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
     //TODO: Move elsewhere. 
     //This will be called when a request from HK comes to change a value in the processor
     const brightnessChangeCallback = (value: number, isDimmable: boolean, accessory:HomeworksAccessory) : void => { //Callback from HK
-      let fadeTime = '00:01';
-      
-      if (!isDimmable) {
-        fadeTime = '00:00';
-      }
+      const fadeTime = isDimmable ? '00:01' : '00:00';
       
       const command = `#OUTPUT,${accessory.getIntegrationId()},1,${value},${fadeTime}`;
 
@@ -147,7 +145,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
         accessory.context.device = confDevice;
         this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
         loadedAccessory = accessory;
-      } else { //Updated Davice
+      } else { //Updated Device
         this.log.debug('[Platform] ~ Updating:', confDevice.name);
         loadedAccessory.context.device = confDevice;
         loadedAccessory.displayName = confDevice.name; //Will be updated unless changed in Homekit.
@@ -161,12 +159,10 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
           isDimmable = false;
           confDevice.isDimmable = isDimmable;
         }
-        
 
         this.log.info('[Platform] Registering: %s as %s Dimmable: %s', loadedAccessory.displayName, confDevice.name, isDimmable);
         // eslint-disable-next-line max-len
-        const hwa =
-          new HomeworksAccessory(this, loadedAccessory, loadedAccessory.UUID, confDevice);
+        const hwa = HomeworksAccessory.CreateAccessory(this, loadedAccessory, loadedAccessory.UUID, confDevice);
         this.homeworksAccessories.push(hwa);
         hwa.lutronLevelChangeCallback = brightnessChangeCallback;
         allAddedAccesories.push(loadedAccessory);
