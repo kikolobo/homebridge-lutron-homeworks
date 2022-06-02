@@ -1,7 +1,7 @@
 {
   "private": false,
   "displayName": "Homeworks",
-  "name": "homebridge-lutron-homeworks",
+  "name": "homebridge-homeworks",
   "version": "0.6.0",
   "description": "Homeworks Plugin for HomeBridge",
   "license": "Apache-2.0",
