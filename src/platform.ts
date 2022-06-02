@@ -25,12 +25,13 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
       this.configuration.host,
       this.configuration.apiPort, 
       this.configuration.username, 
-      this.configuration.password,
+      this.configuration.password,      
     );
 
     this.setupNetworkEngineCallbacks(this.engine);    
 
-    this.api.on('didFinishLaunching', () => {      
+    this.api.on('didFinishLaunching', () => {  
+    this.log.debug('[Platform] didFinishLaunching:');    
       this.discoverDevices();
       this.engine.connect();      
     });
@@ -54,11 +55,14 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
    */
   private setupNetworkEngineCallbacks(engine: NetworkEngine) {
 
+
     const rxCallback = (engine: NetworkEngine, message:string) : void => {   //ON SOCKET TRAFFIC CALLBACK
       const messagesArray = message.split('\n');
 
+
       for (let singleMessage of messagesArray) {
         singleMessage = singleMessage.trim();
+
         if (singleMessage === '') {
           continue; 
         }
@@ -110,7 +114,8 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
   /**
    * Delegate: Called when homebridge restores cached accessories from disk at startup.
    */
-  configureAccessory(accessory: PlatformAccessory) {    
+  configureAccessory(accessory: PlatformAccessory) {
+    this.log.info('Loading accessory from cache:', accessory.displayName);    
     this.cachedPlatformAccessories.push(accessory);
   }
   

@@ -77,7 +77,7 @@ export class NetworkEngine {
         setTimeout(() => {
           this.status = ComState.Boot;
           this.connect();
-        }, 3000);
+        }, 5000);
       }); 
        
     }
@@ -159,7 +159,7 @@ export class NetworkEngine {
           this.log.debug('[Network][Ping] Sent...');
         } 
         this.startPingWatchdog(); //Reschedule watchdog even if we haven't expired.
-      }, 30000); //N = 30 Seconds
+      }, 20000); //N = 20 Seconds
     }
 
     //####
@@ -168,7 +168,7 @@ export class NetworkEngine {
       clearTimeout(this.pingWatchdogRef); //Clear the previous timer (Watchdog)
       this.pingWatchdogRef = setTimeout(() => { //Make a new one for N seconds.
         this.watchdogExpiredFlag = true; 
-      }, 50000); //N = 50 seconds.
+      }, 30000); //N = 30 seconds.
     }
 
     // Callback Helpers <<<<<<<<<<<<<<<<<<<<<<<<<<<<
@@ -181,23 +181,25 @@ export class NetworkEngine {
     // ####
     
     public registerReceiveCallback(callback:DidReceiveCallback) { //Called when we receive data 
-      this.didReceiveCallbacks.push(callback);    
       this.log.debug('[Network] DidReceiveCallback Registered.');  
+      this.didReceiveCallbacks.push(callback);          
     }
 
     public registerDidConnectCallback(callback:DidConnectCallback) { //Called when we connect.
-      this.didConnectCallbacks.push(callback);    
       this.log.debug('[Network] DidConnectCallback Registered.');  
+      this.didConnectCallbacks.push(callback);          
     }
 
     public fireDidReceiveCallbacks(message:string) {       
       for (const callback of this.didReceiveCallbacks) {    //We iterate thru all registered callers.          
+        this.log.debug('[Network] fireDidReceiveCallbacks().');  
         callback(this, message);  //And fire.
       }      
     }
     
 
     public fireDidConnectCallbacks() {
+      this.log.debug('[Network] fireDidConnectCallbacks().');  
       for (const callback of this.didConnectCallbacks) {   //We iterate thru all registered callers.           
         callback(this);  //And fire.
       }
