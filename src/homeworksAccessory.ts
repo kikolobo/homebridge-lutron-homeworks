@@ -400,7 +400,7 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
     this._service.updateCharacteristic(this._platform.Characteristic.CurrentPosition, this._shadeState.Position);
 
     if (this._shadeState.Position === this._shadeState.TargetPosition
-      && this._shadeState.PositionState != this._platform.Characteristic.PositionState.STOPPED) {
+      && this._shadeState.PositionState !== this._platform.Characteristic.PositionState.STOPPED) {
 
       this._shadeState.PositionState = this._platform.Characteristic.PositionState.STOPPED;
       this._service.updateCharacteristic(this._platform.Characteristic.PositionState, this._shadeState.PositionState);
