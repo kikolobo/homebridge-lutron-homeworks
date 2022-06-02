@@ -31,7 +31,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
     this.setupNetworkEngineCallbacks(this.engine);    
 
     this.api.on('didFinishLaunching', () => {  
-    this.log.debug('[Platform] didFinishLaunching:');    
+      this.log.debug('[Platform] didFinishLaunching:');    
       this.discoverDevices();
       this.engine.connect();      
     });

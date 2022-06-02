@@ -96,7 +96,7 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
     On: false,
     Brightness: 0,
     PositionState: 2,
-  }
+  };
 
   constructor(
     platform: HomeworksPlatform,
@@ -258,7 +258,7 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
     Position: 0,
     TargetPosition: 0,
     PositionState: 2,
-  }
+  };
 
   constructor(
     platform: HomeworksPlatform,
