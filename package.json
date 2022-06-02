@@ -2,7 +2,7 @@
   "private": false,
   "displayName": "Homeworks",
   "name": "homebridge-homeworks",
-  "version": "0.8.0",
+  "version": "0.7.1",
   "description": "Homeworks Plugin for HomeBridge",
   "license": "Apache-2.0",
   "repository": {
@@ -12,7 +12,7 @@
   "bugs": {
     "url": "https://github.com/kikolobo/homebridge-lutron-homeworks/issues"
   },
- "engines": {
+  "engines": {
     "node": ">=14.18.1",
     "homebridge": ">=1.3.5"
   },
