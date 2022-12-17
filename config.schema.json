@@ -62,7 +62,13 @@
               "type": "boolean",
               "title": "Is dimmable",
               "default": true
-            }            
+            },
+            "description": {
+              "type": "string",
+              "title": "Description",
+              "required": false,
+              "placeholder": "second room on right"
+            }
           }
         }
       }
