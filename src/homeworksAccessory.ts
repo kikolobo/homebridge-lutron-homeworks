@@ -255,6 +255,7 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
   public lutronLevelChangeCallback? : SetLutronLevelCallback;
 
   public _shadeState = {
+    IsInitialized: false,
     Position: 0,
     TargetPosition: 0,
     PositionState: 2,
@@ -395,7 +396,10 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
       return;
     }
 
-
+    if (!this._shadeState.IsInitialized) {
+      this._shadeState.TargetPosition = targetPositionNumber;
+      this._shadeState.IsInitialized = true;
+    }
     this._shadeState.Position = targetPositionNumber;
     this._service.updateCharacteristic(this._platform.Characteristic.CurrentPosition, this._shadeState.Position);
 
