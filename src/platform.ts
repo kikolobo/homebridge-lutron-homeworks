@@ -103,14 +103,12 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
           const brightness = Number(splitMessage[3]);
           this.log.debug('[Platform][EngineCallback] Set: %s to: %i', targetDevice.getName(), brightness);
           targetDevice.updateBrightness(brightness);
-        }
-        else if (op === '32') {
-          if (splitMessage.length != 5) {
+        } else if (op === '32') {
+          if (splitMessage.length !== 5) {
             this.log.info('[Platform][EngineCallback] message wrong length %s', singleMessage);
             return;
           }
           const action = splitMessage[3];
-          const level = Number(splitMessage[4]);
 
           if (action !== '2') {
             this.log.debug('[Platform][EngineCallback] unknown message action %s', singleMessage);
@@ -167,7 +165,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
       this.engine.send(command);
     };
 
-    //The following will iterate thru the config file, check if the device is cached or updated.
+    //The following will iterate through the config file, check if the device is cached or updated.
     //And also check if we find a device that is no longer in HK but was. And issue a remove.
     const allAddedAccesories: PlatformAccessory[] = [];
 
@@ -175,7 +173,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
 
       if (typeof (confDevice.name) !== 'string' ||
         typeof (confDevice.isDimmable) !== 'boolean' ||
-        typeof (confDevice.integrationID) != 'string' ||
+        typeof (confDevice.integrationID) !== 'string' ||
         (confDevice.deviceType !== 'light' && confDevice.deviceType !== 'shade')
       ) {
         this.log.error('[platform][Error] Unable to load accessory: %s', confDevice.name);
@@ -202,7 +200,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
 
       // Registering to platform
       let isDimmable = true;
-      if (confDevice.isDimmable === undefined || confDevice.isDimmable === false) {
+      if (confDevice.isDimmable === false) {
         isDimmable = false;
         confDevice.isDimmable = isDimmable;
       }
