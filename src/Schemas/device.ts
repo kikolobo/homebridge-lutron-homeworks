@@ -21,5 +21,10 @@ export interface ConfigDevice {
     /**
      * Gets or sets a value that determines whether is dimmable 
      */
-    isDimmable: boolean;    
+    isDimmable: boolean;
+
+    /**
+     * Optional description string
+     */
+    description?: string;
 }

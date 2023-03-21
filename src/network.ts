@@ -175,7 +175,7 @@ export class NetworkEngine {
 
   // ####
   // # We use an array of registered callbacks for events. 
-  // # When this engine is instantiate it the parent registers callbacks to
+  // # When this engine is instantiated it the parent registers callbacks to
   // # be triggered when events happen.
   // # We assume that the parents will not be deallocated!. If they do we will crash.
   // ####

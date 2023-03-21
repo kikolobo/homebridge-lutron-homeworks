@@ -245,7 +245,7 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
  * motion. The immediately reported status from Homeworks is the TargetPosition.
  *
  *  It appears that the end of the scrolling is indicated by an undocumented
- * status ~OUTPUT,XXX,32,2,level
+ *  status ~OUTPUT,XXX,32,2,level. For now, we'll use this as a forced terminator
  *
  * Outside of this, no further status is reported. Worse, subsequent ?OUTPUT,x,1 polls
  * will show this TargetPosition but nothing in between
@@ -255,6 +255,7 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
   public lutronLevelChangeCallback? : SetLutronLevelCallback;
 
   public _shadeState = {
+    IsInitialized: false,
     Position: 0,
     TargetPosition: 0,
     PositionState: 2,
@@ -395,15 +396,25 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
       return;
     }
 
+    if (!this._shadeState.IsInitialized) {
+      this._shadeState.TargetPosition = targetPositionNumber;
+      this._shadeState.IsInitialized = true;
+    }
 
     this._shadeState.Position = targetPositionNumber;
     this._service.updateCharacteristic(this._platform.Characteristic.CurrentPosition, this._shadeState.Position);
 
-    if (this._shadeState.Position === this._shadeState.TargetPosition
-      && this._shadeState.PositionState !== this._platform.Characteristic.PositionState.STOPPED) {
-
-      this._shadeState.PositionState = this._platform.Characteristic.PositionState.STOPPED;
-      this._service.updateCharacteristic(this._platform.Characteristic.PositionState, this._shadeState.PositionState);
+    //  When the current position matches the target position, motion of the shade is stoppped. Note
+    //  we do this regardless of whether the device is stopped
+    if (this._shadeState.Position === this._shadeState.TargetPosition) {
+      this.stopped();
     }
+  }
+
+  public stopped(){
+    this._platform.log.info('[Accessory][%s][stopped]', this.getName());
+
+    this._shadeState.PositionState = this._platform.Characteristic.PositionState.STOPPED;
+    this._service.updateCharacteristic(this._platform.Characteristic.PositionState, this._shadeState.PositionState);
   }
 }
