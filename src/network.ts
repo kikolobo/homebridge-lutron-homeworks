@@ -1,8 +1,16 @@
 import { Logger } from 'homebridge';
 
-interface DidReceiveCallback { (engine: NetworkEngine, message: string): void }
-interface DidConnectCallback { (engine: NetworkEngine): void }
-interface DeviceUpdateCallback { (engine: NetworkEngine, deviceUpdate: DeviceUpdate): void }
+interface DidReceiveCallback { 
+  (engine: NetworkEngine, message: string): void;
+}
+
+interface DidConnectCallback { 
+  (engine: NetworkEngine): void;
+}
+
+interface DeviceUpdateCallback { 
+  (engine: NetworkEngine, deviceUpdate: DeviceUpdate): void;
+}
 
 interface DeviceUpdate {
   integrationId: number;
@@ -23,7 +31,7 @@ enum ComState {
   Connected,
   Establishing,
   Ready,
-  Disconnected
+  Disconnected,
 }
 
 export class NetworkEngine {
@@ -79,14 +87,14 @@ export class NetworkEngine {
     this.socket.write(message + this.crlf);
   }
 
-  public addDevicesFromConfig(configDevices: any[]): void {
+  public addDevicesFromConfig(configDevices: unknown[]): void {
     this.log.info(`[Network] Processing ${configDevices.length} devices from config`);
     
     configDevices.forEach((device, index) => {
-      if (device.integrationID && device.name) {
+      if (this.isValidDeviceConfig(device)) {
         this.devicesToMonitor.push({
           integrationID: device.integrationID,
-          name: device.name
+          name: device.name,
         });
         this.log.debug(`[Network] Added device: ${device.name} (ID: ${device.integrationID})`);
       } else {
@@ -95,6 +103,15 @@ export class NetworkEngine {
     });
     
     this.log.info(`[Network] Total devices configured: ${this.devicesToMonitor.length}`);
+  }
+
+  private isValidDeviceConfig(device: unknown): device is { integrationID: string; name: string } {
+    return typeof device === 'object' && 
+           device !== null && 
+           'integrationID' in device && 
+           'name' in device &&
+           typeof (device as { integrationID: unknown }).integrationID === 'string' &&
+           typeof (device as { name: unknown }).name === 'string';
   }
 
   public setIntegrationId(id: number): void {
@@ -205,13 +222,13 @@ export class NetworkEngine {
         if (this.status === ComState.Authenticating) {
           this.status = ComState.Establishing;
           this.log.debug('[Network] Requesting Monitoring Query');
-          this.socket.write(`#MONITORING,5,1` + this.crlf);
+          this.socket.write('#MONITORING,5,1' + this.crlf);
           
           // Retry monitoring setup if no acknowledgment
           setTimeout(() => {
             if (this.status === ComState.Establishing) {
               this.log.warn('[Network] Requesting Monitoring Query [Second Attempt]');
-              this.socket.write(`#MONITORING,5,1` + this.crlf);
+              this.socket.write('#MONITORING,5,1' + this.crlf);
             }
           }, 2500);
         }
@@ -223,7 +240,6 @@ export class NetworkEngine {
         if (this.status === ComState.Establishing) {
           this.status = ComState.Ready;
           this.log.info('[Network] Connected & Monitoring Query Acknowledged');
-          
           
           this.fireDidConnectCallbacks();
           this.startPingWatchdog();
@@ -250,14 +266,14 @@ export class NetworkEngine {
           const parts = msg.trim().split(',');
           if (parts.length >= 4 && parts[0] === '~OUTPUT') {
             const deviceUpdate: DeviceUpdate = {
-              integrationId: parseInt(parts[1]),
-              action: parseInt(parts[2]),
+              integrationId: parseInt(parts[1], 10),
+              action: parseInt(parts[2], 10),
               value: parseFloat(parts[3]),
-              rawMessage: msg.trim()
+              rawMessage: msg.trim(),
             };
 
             const device = this.devicesToMonitor.find(d => 
-              parseInt(d.integrationID) === deviceUpdate.integrationId
+              parseInt(d.integrationID, 10) === deviceUpdate.integrationId,
             );
 
             if (device) {
@@ -271,26 +287,22 @@ export class NetworkEngine {
               this.log.debug(`[Network] Unknown integration ID ${deviceUpdate.integrationId}: ${msg.trim()}`);
             }
           }
-        }
-        
-        // Handle ~DEVICE format (system device ID based)
-        else if (msg.includes('~DEVICE')) {
+        } else if (msg.includes('~DEVICE')) {
+          // Handle ~DEVICE format (system device ID based)
           const parts = msg.trim().split(',');
           if (parts.length >= 4 && parts[0] === '~DEVICE') {
             const deviceUpdate: DeviceUpdate = {
-              integrationId: parseInt(parts[1]),
-              action: parseInt(parts[2]),
+              integrationId: parseInt(parts[1], 10),
+              action: parseInt(parts[2], 10),
               value: parseFloat(parts[3]),
-              rawMessage: msg.trim()
+              rawMessage: msg.trim(),
             };
 
             this.log.debug(`[Network] System device ${deviceUpdate.integrationId} action ${deviceUpdate.action}: ${deviceUpdate.value}`);
             this.fireDeviceUpdateCallbacks(deviceUpdate);
           }
-        }
-        
-        // Log other interesting messages
-        else if (msg.includes('~ADDRESS')) {
+        } else if (msg.includes('~ADDRESS')) {
+          // Log other interesting messages
           this.log.debug(`[Network] ${msg.trim()}`);
         }
       });
@@ -304,7 +316,7 @@ export class NetworkEngine {
   private startPingWatchdog(): void {
     const pingInterval = 20000; // 20 seconds
     
-    const pingCheck = () => {
+    const pingCheck = (): void => {
       if (this.status === ComState.Ready && this.watchdogExpiredFlag === true) {
         this.watchdogExpiredFlag = false;
         this.socket.write('?SYSTEM,6' + this.crlf);

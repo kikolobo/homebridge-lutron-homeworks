@@ -24,7 +24,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
     apiPort: 23, 
     host: '127.0.0.1', 
     username: '', 
-    password: ''
+    password: '',
   };
   
   private readonly engine: NetworkEngine;
@@ -105,11 +105,11 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
 
   // Network Engine Setup
   private setupNetworkEngineCallbacks(): void {
-    this.engine.registerReceiveCallback((engine, message) => {
+    this.engine.registerReceiveCallback((_engine, message) => {
       this.handleReceivedMessage(message);
     });
 
-    this.engine.registerDidConnectCallback((engine) => {
+    this.engine.registerDidConnectCallback(() => {
       this.handleConnectionEstablished();
     });
 
@@ -148,7 +148,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
       'GLINK_DEVICE_SERIAL_NUM', // Serial number messages
       'Device serial ',          // Device serial messages
       '~ADDRESS',                // Address messages
-      '~DEVICE'                  // Explicitly skip ~DEVICE messages as requested
+      '~DEVICE',                 // Explicitly skip ~DEVICE messages as requested
     ];
 
     return skipPatterns.some(pattern => message.includes(pattern));
@@ -172,7 +172,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
         deviceId: parts[1],
         operation: parts[2],
         value: parts[3],
-        rawMessage: message
+        rawMessage: message,
       };
     }
 
@@ -183,7 +183,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
         operation: parts[2],
         action: parts[3],
         value: parts[4],
-        rawMessage: message
+        rawMessage: message,
       };
     }
 
@@ -282,7 +282,11 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
   }
 
   private createBrightnessChangeCallback() {
-    return (value: number, isDimmable: boolean, accessory: HomeworksAccessory): void => {
+    return (
+      value: number, 
+      isDimmable: boolean, 
+      accessory: HomeworksAccessory,
+    ): void => {
       const fadeTime = isDimmable ? '00:01' : '00:00';
       const command = `#OUTPUT,${accessory.getIntegrationId()},1,${value},${fadeTime}`;
 
@@ -294,42 +298,43 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
     };
   }
 
-  private validateDeviceConfig(device: any): { isValid: boolean; errors: string[] } {
+  private validateDeviceConfig(device: unknown): { isValid: boolean; errors: string[] } {
     const errors: string[] = [];
 
     const requiredFields = [
       { name: 'name', type: 'string' },
       { name: 'integrationID', type: 'string' },
       { name: 'deviceType', type: 'string' },
-      { name: 'isDimmable', type: 'boolean' }
+      { name: 'isDimmable', type: 'boolean' },
     ];
 
     // Check for missing or invalid properties
     for (const field of requiredFields) {
-      if (!device || !device.hasOwnProperty(field.name)) {
+      if (!device || !Object.prototype.hasOwnProperty.call(device, field.name)) {
         errors.push(`Missing required property: ${field.name}`);
-      } else if (typeof device[field.name] !== field.type) {
-        errors.push(`${field.name} must be ${field.type} (got: ${typeof device[field.name]})`);
+      } else if (typeof (device as Record<string, unknown>)[field.name] !== field.type) {
+        errors.push(`${field.name} must be ${field.type} (got: ${typeof (device as Record<string, unknown>)[field.name]})`);
       }
     }
 
     // Validate deviceType enum
-    if (device?.deviceType && !['light', 'shade'].includes(device.deviceType)) {
-      errors.push(`deviceType must be 'light' or 'shade' (got: ${device.deviceType})`);
+    const deviceRecord = device as Record<string, unknown>;
+    if (deviceRecord?.deviceType && !['light', 'shade'].includes(deviceRecord.deviceType as string)) {
+      errors.push(`deviceType must be 'light' or 'shade' (got: ${deviceRecord.deviceType})`);
     }
 
     // Validate integrationID is not empty
-    if (device?.integrationID && device.integrationID.trim() === '') {
+    if (deviceRecord?.integrationID && (deviceRecord.integrationID as string).trim() === '') {
       errors.push('integrationID cannot be empty');
     }
 
     return {
       isValid: errors.length === 0,
-      errors
+      errors,
     };
   }
 
-  private logValidationErrors(device: any, errors: string[]): void {
+  private logValidationErrors(device: unknown, errors: string[]): void {
     this.log.error('[Platform] Invalid device configuration:');
     this.log.error(JSON.stringify(device, null, 2));
     this.log.error('[Platform] Validation errors:');
@@ -358,21 +363,25 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
   }
 
   private registerAccessory(
-    accessory: PlatformAccessory, 
-    deviceConfig: ConfigDevice, 
-    brightnessChangeCallback: (value: number, isDimmable: boolean, accessory: HomeworksAccessory) => void
+    accessory: PlatformAccessory,
+    deviceConfig: ConfigDevice,
+    brightnessChangeCallback: (
+      value: number,
+      isDimmable: boolean,
+      accessory: HomeworksAccessory,
+    ) => void,
   ): void {
     const isDimmable = deviceConfig.isDimmable !== false;
 
     this.log.info(
-      `[Platform] Registering: ${accessory.displayName} (ID: ${deviceConfig.integrationID}, Dimmable: ${isDimmable})`
+      `[Platform] Registering: ${accessory.displayName} (ID: ${deviceConfig.integrationID}, Dimmable: ${isDimmable})`,
     );
 
     const homeworksAccessory = HomeworksAccessory.CreateAccessory(
-      this, 
-      accessory, 
-      accessory.UUID, 
-      deviceConfig
+      this,
+      accessory,
+      accessory.UUID,
+      deviceConfig,
     );
 
     homeworksAccessory.lutronLevelChangeCallback = brightnessChangeCallback;

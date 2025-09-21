@@ -2,41 +2,30 @@
   "private": false,
   "displayName": "Homeworks",
   "name": "homebridge-homeworks",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Homeworks Plugin for HomeBridge",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kikolobo/homebridge-lutron-homeworks"
+    "url": "git+https://github.com/kikolobo/homebridge-lutron-homeworks.git"
   },
   "bugs": {
     "url": "https://github.com/kikolobo/homebridge-lutron-homeworks/issues"
   },
   "engines": {
-   "node": "^18.20.4 || ^20.18.0 || ^22.10.0",
-    "homebridge": "^1.8.0 || ^2.0.0-beta.0"
-  },
-  "main": "dist/index.js",
-  "scripts": {
-    "lint": "eslint src/**.ts --max-warnings=0",
-    "watch": "npm run build && npm link && nodemon",
-    "build": "rimraf ./dist && tsc",
-    "prepublishOnly": "npm run lint && npm run build"
-  },
-  "keywords": [
-    "homebridge-plugin"
-  ],
-  "main": "dist/index.js",
-  "engines": {
     "node": "^18.20.4 || ^20.18.0 || ^22.10.0",
     "homebridge": "^1.8.0 || ^2.0.0-beta.0"
   },
+  "main": "dist/index.js",
   "scripts": {
     "build": "rimraf ./dist && tsc",
     "lint": "eslint . --max-warnings=0",
     "prepublishOnly": "npm run lint && npm run build",
     "watch": "npm run build && npm link && nodemon"
   },
+  "keywords": [
+    "homebridge-plugin"
+  ],
   "dependencies": {
     "homebridge-lib": "^7.1.4"
   },
