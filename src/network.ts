@@ -284,9 +284,9 @@ export class NetworkEngine {
                 this.log.debug(`[Network] ${device.name} action ${deviceUpdate.action}: ${deviceUpdate.value}`);
               }
               this.fireDeviceUpdateCallbacks(deviceUpdate);
-            } else {
-              this.log.warn(`[Network] Unknown integration ID ${deviceUpdate.integrationId}: ${msg.trim()}`);
-            }
+            } //else {
+            //   this.log.warn(`[Network] Unknown integration ID ${deviceUpdate.integrationId}: ${msg.trim()}`);
+            // }
           }
         } else if (msg.includes('~DEVICE')) {
           // Handle ~DEVICE format (system device ID based)
