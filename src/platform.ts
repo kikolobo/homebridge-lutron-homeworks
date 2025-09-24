@@ -45,13 +45,12 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
       this.configuration.username,
       this.configuration.password,
     );
-
     this.setupNetworkEngineCallbacks();
 
     this.api.on('didFinishLaunching', () => {  
-        this.log.debug('[Platform] didFinishLaunching:');    
-        this.discoverDevices();                
-        this.engine.connect();      
+      this.log.debug('[Platform] didFinishLaunching:');    
+      this.discoverDevices();                
+      this.engine.connect();      
     });
   }
 

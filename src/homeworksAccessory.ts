@@ -80,7 +80,7 @@ export class HomeworksAccessory {
  */
 export class HomeworksLightAccessory extends HomeworksAccessory {
   private _service: Service;
-  private _lastKnownBrightness: number = 100; // Store last non-zero brightness
+  private _lastKnownBrightness = 100;
 
   public _dimmerState = {
     On: false,

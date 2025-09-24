@@ -88,26 +88,22 @@ export class NetworkEngine {
   }
 
   public addDevicesFromConfig(configDevices: unknown[]): void {
-  this.log.info(`[Network] addDevicesFromConfig called with ${configDevices.length} devices`);
-  this.log.debug(`[Network] Raw config devices: ${JSON.stringify(configDevices)}`);
-  
-  configDevices.forEach((device, index) => {
-    this.log.debug(`[Network] Processing device ${index}: ${JSON.stringify(device)}`);
+    this.log.info(`[Network] Processing ${configDevices.length} devices from config`);
     
-    if (this.isValidDeviceConfig(device)) {
-      this.devicesToMonitor.push({
-        integrationID: device.integrationID,
-        name: device.name,
-      });
-      this.log.info(`[Network] Added device: ${device.name} (ID: ${device.integrationID})`);
-    } else {
-      this.log.warn(`[Network] Invalid device configuration at index ${index}: ${JSON.stringify(device)}`);
-    }
-  });
-  
-  this.log.info(`[Network] Total devices configured: ${this.devicesToMonitor.length}`);
-  this.log.debug(`[Network] Final devicesToMonitor: ${JSON.stringify(this.devicesToMonitor)}`);
-}
+    configDevices.forEach((device, index) => {
+      if (this.isValidDeviceConfig(device)) {
+        this.devicesToMonitor.push({
+          integrationID: device.integrationID,
+          name: device.name,
+        });
+        this.log.debug(`[Network] Added device: ${device.name} (ID: ${device.integrationID})`);
+      } else {
+        this.log.warn(`[Network] Invalid device configuration at index ${index}: ${JSON.stringify(device)}`);
+      }
+    });
+    
+    this.log.info(`[Network] Total devices configured: ${this.devicesToMonitor.length}`);
+  }
 
   private isValidDeviceConfig(device: unknown): device is { integrationID: string; name: string } {
     return typeof device === 'object' && 
@@ -280,8 +276,6 @@ export class NetworkEngine {
               d.integrationID === deviceUpdate.integrationId.toString() ||
               parseInt(d.integrationID, 10) === deviceUpdate.integrationId,
             );
-
-            
 
             if (device) {
               if (deviceUpdate.action === 1) { // Light level
