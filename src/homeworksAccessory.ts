@@ -80,6 +80,7 @@ export class HomeworksAccessory {
  */
 export class HomeworksLightAccessory extends HomeworksAccessory {
   private _service: Service;
+  private _lastKnownBrightness: number = 100; // Store last non-zero brightness
 
   public _dimmerState = {
     On: false,
@@ -93,7 +94,13 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
     uuid: string,
     config: ConfigDevice,
   ) {
-    super(platform, accessory, uuid, config);
+    super(platform, accessory, uuid, config);  
+
+    // Restore last known brightness from context if available
+    if (this._accessory.context.lastKnownBrightness && this._accessory.context.lastKnownBrightness > 0) {
+      this._lastKnownBrightness = this._accessory.context.lastKnownBrightness;
+      this._platform.log.debug('[Accessory][%s] Restored lastKnownBrightness from context: %i', this._name, this._lastKnownBrightness);
+    }
 
     // Assign HK Service
     this._service = this._accessory.getService(this._platform.Service.Lightbulb)
@@ -123,6 +130,18 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
   }
 
   /**
+   * Store last known brightness for later restoration
+   */
+  private storeLastKnownBrightness(brightness: number): void {
+    if (brightness > 0) {
+      this._lastKnownBrightness = brightness;
+      // Persist to context for restart survival
+      this._accessory.context.lastKnownBrightness = brightness;
+      this._platform.log.debug('[Accessory][%s] Stored lastKnownBrightness: %i', this._name, brightness);
+    }
+  }
+
+  /**
    * Handle the "SET" ON requests from HomeKit
    */
   private setOn(targetValue: CharacteristicValue, callback: CharacteristicSetCallback): void {
@@ -136,12 +155,24 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
     this._dimmerState.On = targetValue as boolean;
 
     if (targetValue === true) {
-      this._dimmerState.Brightness = 100;
+      // Turning ON - restore last known brightness
+      this._dimmerState.Brightness = this._lastKnownBrightness;
+      this._platform.log.debug('[Accessory][%s][setOn] Restoring brightness to %i', this._name, this._lastKnownBrightness);
+      
+      // Update HomeKit characteristic to reflect the restored brightness
+      if (this.getIsDimmable()) {
+        this._service.updateCharacteristic(this._platform.Characteristic.Brightness, this._dimmerState.Brightness);
+      }
     } else {
+      // Turning OFF - store current brightness if it's not zero
+      if (this._dimmerState.Brightness > 0) {
+        this.storeLastKnownBrightness(this._dimmerState.Brightness);
+      }
       this._dimmerState.Brightness = 0;
     }
 
-    if (!this.getIsDimmable()) { // If we are not dimmable. Assume 100% brightness on on state.
+    // For non-dimmable lights, ensure brightness is updated in HomeKit
+    if (!this.getIsDimmable()) {
       this._service.updateCharacteristic(this._platform.Characteristic.Brightness, this._dimmerState.Brightness);
     }
 
@@ -149,7 +180,8 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
       this.lutronLevelChangeCallback(this._dimmerState.Brightness, isDimmable, this);
     }
 
-    this._platform.log.debug('[Accessory][%s][setOn] [state: %s|dim: %s]', this._name, this._dimmerState.On, this.getIsDimmable());
+    this._platform.log.debug('[Accessory][%s][setOn] [state: %s|dim: %s|brightness: %i]', 
+      this._name, this._dimmerState.On, this.getIsDimmable(), this._dimmerState.Brightness);
 
     callback(null);
   }
@@ -188,7 +220,14 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
     this._platform.log.debug('[Accessory][%s][setBrightness] -> %i', this.getName(), targetValue);
 
     const targetBrightnessVal = targetValue as number;
+    
+    // Store non-zero brightness values for later restoration
+    this.storeLastKnownBrightness(targetBrightnessVal);
+    
     this._dimmerState.Brightness = targetBrightnessVal;
+
+    // Update the On state based on brightness
+    this._dimmerState.On = targetBrightnessVal > 0;
 
     if (this.lutronLevelChangeCallback) {
       this.lutronLevelChangeCallback(targetBrightnessVal, this.getIsDimmable(), this);
@@ -202,19 +241,27 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
    * With new values from processor.
    */
   public updateBrightness(targetBrightnessVal: CharacteristicValue): void {
-    this._platform.log.info('[Accessory][%s][updateBrightness] to %i', this._name, targetBrightnessVal);
+    this._platform.log.debug('[Accessory][%s][updateBrightness] to %i', this._name, targetBrightnessVal);
 
     if (targetBrightnessVal === this._dimmerState.Brightness) { // If the value is the same. Ignore to save network traffic.
       return;
     }
 
-    if (targetBrightnessVal > 0) {
+    const brightnessNumber = targetBrightnessVal as number;
+
+    // Store non-zero brightness for future restoration
+    this.storeLastKnownBrightness(brightnessNumber);
+
+    // Update internal state
+    if (brightnessNumber > 0) {
       this._dimmerState.On = true;
-    } else if (targetBrightnessVal <= 0) {
+    } else if (brightnessNumber <= 0) {
       this._dimmerState.On = false;
     }
 
-    this._dimmerState.Brightness = targetBrightnessVal as number;
+    this._dimmerState.Brightness = brightnessNumber;
+    
+    // Update HomeKit characteristics
     this._service.updateCharacteristic(this._platform.Characteristic.On, this._dimmerState.On);
     this._service.updateCharacteristic(this._platform.Characteristic.Brightness, this._dimmerState.Brightness);
   }
@@ -234,7 +281,6 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
  */
 export class HomeworksShadeAccessory extends HomeworksAccessory {
   private _service: Service;
-  public lutronLevelChangeCallback?: SetLutronLevelCallback;
 
   public _shadeState = {
     IsInitialized: false,

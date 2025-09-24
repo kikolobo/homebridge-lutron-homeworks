@@ -88,22 +88,26 @@ export class NetworkEngine {
   }
 
   public addDevicesFromConfig(configDevices: unknown[]): void {
-    this.log.info(`[Network] Processing ${configDevices.length} devices from config`);
+  this.log.info(`[Network] addDevicesFromConfig called with ${configDevices.length} devices`);
+  this.log.debug(`[Network] Raw config devices: ${JSON.stringify(configDevices)}`);
+  
+  configDevices.forEach((device, index) => {
+    this.log.debug(`[Network] Processing device ${index}: ${JSON.stringify(device)}`);
     
-    configDevices.forEach((device, index) => {
-      if (this.isValidDeviceConfig(device)) {
-        this.devicesToMonitor.push({
-          integrationID: device.integrationID,
-          name: device.name,
-        });
-        this.log.debug(`[Network] Added device: ${device.name} (ID: ${device.integrationID})`);
-      } else {
-        this.log.warn(`[Network] Invalid device configuration at index ${index}: ${JSON.stringify(device)}`);
-      }
-    });
-    
-    this.log.info(`[Network] Total devices configured: ${this.devicesToMonitor.length}`);
-  }
+    if (this.isValidDeviceConfig(device)) {
+      this.devicesToMonitor.push({
+        integrationID: device.integrationID,
+        name: device.name,
+      });
+      this.log.info(`[Network] Added device: ${device.name} (ID: ${device.integrationID})`);
+    } else {
+      this.log.warn(`[Network] Invalid device configuration at index ${index}: ${JSON.stringify(device)}`);
+    }
+  });
+  
+  this.log.info(`[Network] Total devices configured: ${this.devicesToMonitor.length}`);
+  this.log.debug(`[Network] Final devicesToMonitor: ${JSON.stringify(this.devicesToMonitor)}`);
+}
 
   private isValidDeviceConfig(device: unknown): device is { integrationID: string; name: string } {
     return typeof device === 'object' && 
@@ -273,8 +277,11 @@ export class NetworkEngine {
             };
 
             const device = this.devicesToMonitor.find(d => 
+              d.integrationID === deviceUpdate.integrationId.toString() ||
               parseInt(d.integrationID, 10) === deviceUpdate.integrationId,
             );
+
+            
 
             if (device) {
               if (deviceUpdate.action === 1) { // Light level
@@ -284,7 +291,7 @@ export class NetworkEngine {
               }
               this.fireDeviceUpdateCallbacks(deviceUpdate);
             } else {
-              this.log.debug(`[Network] Unknown integration ID ${deviceUpdate.integrationId}: ${msg.trim()}`);
+              this.log.warn(`[Network] Unknown integration ID ${deviceUpdate.integrationId}: ${msg.trim()}`);
             }
           }
         } else if (msg.includes('~DEVICE')) {

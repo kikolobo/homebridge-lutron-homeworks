@@ -48,10 +48,10 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
 
     this.setupNetworkEngineCallbacks();
 
-    this.api.on('didFinishLaunching', () => {
-      this.log.debug('[Platform] didFinishLaunching');
-      this.discoverDevices();
-      this.engine.connect();
+    this.api.on('didFinishLaunching', () => {  
+        this.log.debug('[Platform] didFinishLaunching:');    
+        this.discoverDevices();                
+        this.engine.connect();      
     });
   }
 
@@ -209,7 +209,8 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
         break;
         
       default:
-        this.log.debug(`[Platform] Unknown operation: ${parsedMessage.operation} for ${targetDevice.getName()}`);
+        //Simply ignore. 
+        // this.log.debug(`[Platform] Unknown operation: ${parsedMessage.operation} for ${targetDevice.getName()}`);
     }
   }
 
@@ -290,10 +291,14 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
       const fadeTime = isDimmable ? '00:01' : '00:00';
       const command = `#OUTPUT,${accessory.getIntegrationId()},1,${value},${fadeTime}`;
 
+      this.log.debug(`[Platform][createBrightnessChangeCallback][command] ${command}`);
+      // #OUTPUT,204,1,26,00:01
+      //Unrecognized OUTPUT format: ~OUTPUT,204,30,1,29.00
+
       // Update local state immediately for better responsiveness
       accessory.updateBrightness(value);
 
-      this.log.debug(`[Platform] Setting ${accessory.getName()} to ${value}%`);
+      // this.log.debug(`[Platform][createBrightnessChangeCallback] ${accessory.getName()} to ${value}%`);
       this.engine.send(command);
     };
   }
