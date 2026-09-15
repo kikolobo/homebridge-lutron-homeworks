@@ -284,10 +284,17 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
  * will show this TargetPosition but nothing in between
  */
 export class HomeworksShadeAccessory extends HomeworksAccessory {
+  /**
+   * Upper bound on how long we report a shade as moving. The stop message is
+   * undocumented, so this backstops one that never arrives and prevents a
+   * shade from being stuck "opening"/"closing" in the Home app forever.
+   */
+  private static readonly MOTION_TIMEOUT_MS = 60000;
+
   private _service: Service;
+  private _motionTimeoutRef: NodeJS.Timeout | null = null;
 
   public _shadeState = {
-    IsInitialized: false,
     Position: 0,
     TargetPosition: 0,
     PositionState: 2,
@@ -356,12 +363,49 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
     // Begin motion to the target level. We only set the target level and let reported status
     // set the current position
     this._shadeState.TargetPosition = targetPositionNumber;
+    this.beginMotion();
 
     if (this.lutronLevelChangeCallback) {
       this.lutronLevelChangeCallback(this._shadeState.TargetPosition, false, this);
     }
 
     callback(null); // null or error
+  }
+
+  /**
+   * True while we are waiting for a move we commanded to finish.
+   */
+  private get isMoving(): boolean {
+    return this._motionTimeoutRef !== null;
+  }
+
+  /**
+   * Report the shade as moving until the processor tells us it stopped.
+   *
+   * The processor echoes the commanded level back immediately, so
+   * CurrentPosition reaching TargetPosition is not evidence that the shade has
+   * arrived. Only the ~OUTPUT,x,32,2 message (or the timeout) ends the motion.
+   */
+  private beginMotion(): void {
+    this._shadeState.PositionState = this._shadeState.TargetPosition > this._shadeState.Position
+      ? this._platform.Characteristic.PositionState.INCREASING
+      : this._platform.Characteristic.PositionState.DECREASING;
+
+    this._platform.log.debug('[Accessory][%s][beginMotion] -> %i', this._name, this._shadeState.PositionState);
+
+    this._service.updateCharacteristic(this._platform.Characteristic.PositionState, this._shadeState.PositionState);
+
+    if (this._motionTimeoutRef) {
+      clearTimeout(this._motionTimeoutRef);
+    }
+
+    this._motionTimeoutRef = setTimeout(() => {
+      this._platform.log.debug('[Accessory][%s] No stop message received, assuming motion finished', this._name);
+      this.stopped();
+    }, HomeworksShadeAccessory.MOTION_TIMEOUT_MS);
+
+    // Never hold Homebridge open on our account.
+    this._motionTimeoutRef.unref();
   }
 
   /**
@@ -387,17 +431,14 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
       return;
     }
 
-    if (!this._shadeState.IsInitialized) {
-      this._shadeState.TargetPosition = targetPositionNumber;
-      this._shadeState.IsInitialized = true;
-    }
-
     this._shadeState.Position = targetPositionNumber;
     this._service.updateCharacteristic(this._platform.Characteristic.CurrentPosition, this._shadeState.Position);
 
-    // When the current position matches the target position, motion of the shade is stopped. Note
-    // we do this regardless of whether the device is stopped
-    if (this._shadeState.Position === this._shadeState.TargetPosition) {
+    // A change we did not command (keypad, scene, or the initial poll): follow
+    // it and stay stopped. A move we did command ends on the stop message.
+    if (!this.isMoving) {
+      this._shadeState.TargetPosition = this._shadeState.Position;
+      this._service.updateCharacteristic(this._platform.Characteristic.TargetPosition, this._shadeState.TargetPosition);
       this.stopped();
     }
   }
@@ -407,6 +448,18 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
    */
   public stopped(): void {
     this._platform.log.info('[Accessory][%s][stopped]', this.getName());
+
+    if (this._motionTimeoutRef) {
+      clearTimeout(this._motionTimeoutRef);
+      this._motionTimeoutRef = null;
+    }
+
+    // Stopping part-way through travel would otherwise leave HomeKit showing a
+    // target the shade will never reach, so settle it on where we ended up.
+    if (this._shadeState.TargetPosition !== this._shadeState.Position) {
+      this._shadeState.TargetPosition = this._shadeState.Position;
+      this._service.updateCharacteristic(this._platform.Characteristic.TargetPosition, this._shadeState.TargetPosition);
+    }
 
     this._shadeState.PositionState = this._platform.Characteristic.PositionState.STOPPED;
     this._service.updateCharacteristic(this._platform.Characteristic.PositionState, this._shadeState.PositionState);
