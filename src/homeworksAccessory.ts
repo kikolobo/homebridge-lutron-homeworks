@@ -305,9 +305,8 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
       || this._accessory.addService(this._platform.Service.WindowCovering);
     this._service.setCharacteristic(this._platform.Characteristic.Name, this._accessory.context.device.name);
 
-    // Current position of the shade
+    // Current position of the shade (read-only: reported by the processor)
     this._service.getCharacteristic(this._platform.Characteristic.CurrentPosition)
-      .on('set', this.setCurrentPosition.bind(this))
       .on('get', this.getCurrentPosition.bind(this));
 
     // Target position of the shade
@@ -315,9 +314,8 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
       .on('set', this.setTargetPosition.bind(this))
       .on('get', this.getTargetPosition.bind(this));
 
-    // Current status of shade motion
+    // Current status of shade motion (read-only: derived from the processor)
     this._service.getCharacteristic(this._platform.Characteristic.PositionState)
-      .on('set', this.setPositionState.bind(this))
       .on('get', this.getPositionState.bind(this));
 
     this._shadeState.PositionState = this._platform.Characteristic.PositionState.STOPPED;
@@ -332,29 +330,6 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
     this._platform.log.info('[Accessory][%s][getCurrentPosition] -> %i', this._name, position);
 
     callback(null, position); // error,value
-  }
-
-  /**
-   * Handle the "SET" CurrentPosition requests from HomeKit
-   */
-  private setCurrentPosition(position: CharacteristicValue, callback: CharacteristicSetCallback): void {
-    this._platform.log.info('[Accessory][%s][setCurrentPosition] -> %i', this.getName(), position);
-
-    const positionNumber = position as number;
-
-    // If there is no movement, no change necessary
-    if (positionNumber === this._shadeState.Position) {
-      callback(null);
-      return;
-    }
-
-    this._shadeState.Position = positionNumber;
-
-    if (this.lutronLevelChangeCallback) {
-      this.lutronLevelChangeCallback(this._shadeState.Position, false, this);
-    }
-
-    callback(null); // null or error
   }
 
   /**
@@ -396,16 +371,6 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
     this._platform.log.info('[Accessory][%s][getPositionState] -> %i', this._name, this._shadeState.PositionState);
 
     callback(null, this._shadeState.PositionState); // error,value
-  }
-
-  /**
-   * Handle the "SET" PositionState requests from HomeKit
-   */
-  private setPositionState(targetState: CharacteristicValue, callback: CharacteristicSetCallback): void {
-    this._platform.log.info('[Accessory][%s][setPositionState] -> %i', this.getName(), targetState);
-
-    // Don't know what to do here.
-    callback(null); // null or error
   }
 
   /**
