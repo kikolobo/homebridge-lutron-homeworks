@@ -16,8 +16,8 @@ interface ParsedOutputMessage {
 // Remove this interface and use the existing ConfigDevice type from your schema
 
 export class HomeworksPlatform implements DynamicPlatformPlugin {
-  public readonly Service: typeof Service = this.api.hap.Service;
-  public readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic;
+  public readonly Service: typeof Service;
+  public readonly Characteristic: typeof Characteristic;
   
   private configuration: Configuration = {
     devices: [], 
@@ -36,6 +36,12 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
     public readonly config: PlatformConfig,
     public readonly api: API,
   ) {
+    // Assigned here rather than as field initializers: under ES2022 class-field
+    // semantics, field initializers run before the constructor parameter
+    // properties (including `api`) are assigned.
+    this.Service = this.api.hap.Service;
+    this.Characteristic = this.api.hap.Characteristic;
+
     this.loadUserConfiguration();
 
     this.engine = new NetworkEngine(
@@ -47,10 +53,15 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
     );
     this.setupNetworkEngineCallbacks();
 
-    this.api.on('didFinishLaunching', () => {  
-      this.log.debug('[Platform] didFinishLaunching:');    
-      this.discoverDevices();                
-      this.engine.connect();      
+    this.api.on('didFinishLaunching', () => {
+      this.log.debug('[Platform] didFinishLaunching:');
+      this.discoverDevices();
+      this.engine.connect();
+    });
+
+    this.api.on('shutdown', () => {
+      this.log.debug('[Platform] shutdown:');
+      this.engine.disconnect();
     });
   }
 

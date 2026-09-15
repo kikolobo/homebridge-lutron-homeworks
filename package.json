@@ -13,8 +13,8 @@
     "url": "https://github.com/kikolobo/homebridge-lutron-homeworks/issues"
   },
   "engines": {
-    "node": "^18.20.4 || ^20.18.0 || ^22.10.0",
-    "homebridge": "^1.8.0 || ^2.0.0-beta.0"
+    "node": "^20.18.0 || ^22 || ^24 || ^26",
+    "homebridge": "^1.8.0 || ^2.0.0"
   },
   "main": "dist/index.js",
   "scripts": {
@@ -26,14 +26,11 @@
   "keywords": [
     "homebridge-plugin"
   ],
-  "dependencies": {
-    "homebridge-lib": "^7.1.4"
-  },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
     "@types/node": "^22.13.5",
     "eslint": "^9.21.0",
-    "homebridge": "^2.0.0-beta.0",
+    "homebridge": "^2.4.0",
     "nodemon": "^3.1.9",
     "rimraf": "^6.0.1",
     "ts-node": "^10.9.2",

@@ -1,3 +1,5 @@
+import { Socket } from 'net';
+
 import { Logger } from 'homebridge';
 
 interface DidReceiveCallback { 
@@ -35,12 +37,13 @@ enum ComState {
 }
 
 export class NetworkEngine {
-  private readonly net = require('net');
-  private socket = new this.net.Socket();
+  private socket: Socket = new Socket();
   private status: ComState = ComState.Boot;
   private readonly crlf = '\r\n';
   private watchdogExpiredFlag = false;
   private pingWatchdogRef: NodeJS.Timeout | null = null;
+  private reconnectRef: NodeJS.Timeout | null = null;
+  private isShuttingDown = false;
 
   private didReceiveCallbacks: DidReceiveCallback[] = [];
   private didConnectCallbacks: DidConnectCallback[] = [];
@@ -62,7 +65,7 @@ export class NetworkEngine {
 
   // Public API
   public connect(): void {
-    this.socket = new this.net.Socket();
+    this.socket = new Socket();
     this.setupBinding();
     this.setupSocketListeners();
 
@@ -179,15 +182,23 @@ export class NetworkEngine {
 
     this.socket.on('close', () => {
       this.status = ComState.Disconnected;
-      this.log.error('[Network] Connection Lost. Reconnect attempt in 5 seconds');
-      
+
       // Clean up watchdog
       if (this.pingWatchdogRef) {
         clearTimeout(this.pingWatchdogRef);
         this.pingWatchdogRef = null;
       }
-      
-      setTimeout(() => {
+
+      // Homebridge is shutting us down. Do not schedule another reconnect.
+      if (this.isShuttingDown) {
+        this.log.debug('[Network] Connection closed during shutdown');
+        return;
+      }
+
+      this.log.error('[Network] Connection Lost. Reconnect attempt in 5 seconds');
+
+      this.reconnectRef = setTimeout(() => {
+        this.reconnectRef = null;
         this.status = ComState.Boot;
         this.connect();
       }, 5000);
@@ -374,14 +385,21 @@ export class NetworkEngine {
   // Cleanup
   public disconnect(): void {
     this.log.info('[Network] Disconnecting...');
-    
+
+    this.isShuttingDown = true;
+
     if (this.pingWatchdogRef) {
       clearTimeout(this.pingWatchdogRef);
       this.pingWatchdogRef = null;
     }
-    
+
+    if (this.reconnectRef) {
+      clearTimeout(this.reconnectRef);
+      this.reconnectRef = null;
+    }
+
     this.status = ComState.Disconnected;
-    
+
     if (this.socket) {
       this.socket.destroy();
     }
