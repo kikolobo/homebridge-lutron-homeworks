@@ -1,6 +1,10 @@
 # Ignore source code
 src
 
+# Repo-only assets: linked from the README, not used at runtime
+img_1.png
+LutronXML_Parsin_Tool
+
 # ------------- Defaults ------------- #
 
 # gitHub actions
