@@ -119,6 +119,12 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
       this._service.getCharacteristic(this._platform.Characteristic.Brightness)
         .on('set', this.setBrightness.bind(this))       // SET - bind to the 'setBrightness` method below
         .on('get', this.getBrightness.bind(this));      // GET - bind to the 'getBrightness` method below
+    } else if (this._service.testCharacteristic(this._platform.Characteristic.Brightness)) {
+      // A previous version pushed Brightness onto non-dimmable lights, and HAP
+      // adds optional characteristics on access. Drop it from the cached
+      // service so these show up as a plain switch in HomeKit.
+      this._platform.log.debug('[Accessory][%s] Removing Brightness from non-dimmable light', this._name);
+      this._service.removeCharacteristic(this._service.getCharacteristic(this._platform.Characteristic.Brightness));
     }
   }
 
@@ -169,11 +175,6 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
         this.storeLastKnownBrightness(this._dimmerState.Brightness);
       }
       this._dimmerState.Brightness = 0;
-    }
-
-    // For non-dimmable lights, ensure brightness is updated in HomeKit
-    if (!this.getIsDimmable()) {
-      this._service.updateCharacteristic(this._platform.Characteristic.Brightness, this._dimmerState.Brightness);
     }
 
     if (this.lutronLevelChangeCallback) {
@@ -263,7 +264,10 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
     
     // Update HomeKit characteristics
     this._service.updateCharacteristic(this._platform.Characteristic.On, this._dimmerState.On);
-    this._service.updateCharacteristic(this._platform.Characteristic.Brightness, this._dimmerState.Brightness);
+
+    if (this.getIsDimmable()) {
+      this._service.updateCharacteristic(this._platform.Characteristic.Brightness, this._dimmerState.Brightness);
+    }
   }
 }
 
