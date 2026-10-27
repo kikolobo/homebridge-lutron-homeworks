@@ -296,9 +296,11 @@ export class NetworkEngine {
       }
 
       this.lastReceivedAt = Date.now();
-      this.receiveBuffer += data.toString();
-
       this.log.debug(`[Network] Received: ${JSON.stringify(data.toString())}`);
+
+      // The processor pads some output with NUL bytes (the prompt after login
+      // arrives as "QNET> \0"), which would stop it being recognised.
+      this.receiveBuffer += data.toString().replace(/\0/g, '');
 
       // TCP does not preserve message boundaries: handle complete lines only
       // and keep any trailing partial line for the next chunk.
