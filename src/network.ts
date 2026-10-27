@@ -2,23 +2,12 @@ import { Socket } from 'net';
 
 import { Logger } from 'homebridge';
 
-interface DidReceiveCallback { 
+interface DidReceiveCallback {
   (engine: NetworkEngine, message: string): void;
 }
 
-interface DidConnectCallback { 
+interface DidConnectCallback {
   (engine: NetworkEngine): void;
-}
-
-interface DeviceUpdateCallback { 
-  (engine: NetworkEngine, deviceUpdate: DeviceUpdate): void;
-}
-
-interface DeviceUpdate {
-  integrationId: number;
-  action: number;
-  value: number;
-  rawMessage: string;
 }
 
 interface MonitorDevice {
@@ -36,19 +25,74 @@ enum ComState {
   Disconnected,
 }
 
+/**
+ * Prompt printed by the processor once it is ready for a command
+ * (QNET> on HomeWorks QS, GNET> on other Lutron processors). It can arrive on
+ * its own or glued to the front of the next line of output.
+ */
+const PROMPT_REGEX = /^(?:\s*[A-Z]NET>\s*)+/;
+
 export class NetworkEngine {
-  private socket: Socket = new Socket();
+  // How long we may take to go from TCP connect to monitoring acknowledged.
+  // HomeWorks processors are slow to answer (a reply can take a couple of
+  // seconds), so every timeout below is generous rather than tight.
+  private static readonly ESTABLISH_TIMEOUT_MS = 30000;
+  // How often #MONITORING is re-sent while waiting for its acknowledgement.
+  private static readonly MONITORING_RETRY_MS = 5000;
+  // Average time between re-sending #MONITORING on an established session, in
+  // case the processor quietly stopped reporting to it. The command is
+  // idempotent. Each refresh lands at a random point between 25 and 35
+  // minutes so child bridges do not send it together.
+  private static readonly MONITORING_REFRESH_MS = 30 * 60 * 1000;
+  // Average time between liveness checks. Each check is scheduled at a random
+  // point between half and one and a half times this, so child bridges
+  // started together drift apart and do not ping the processor in lockstep.
+  private static readonly HEARTBEAT_INTERVAL_MS = 5000;
+  // Ping once nothing has been received for this long. With the check spacing
+  // above, the first ping goes out 15-22.5s into a silence, keeping the
+  // session well inside the ~30s of idle the processor is known to tolerate.
+  private static readonly PING_AFTER_IDLE_MS = 15000;
+  // Minimum time between pings, so a slow reply is not met with another ping.
+  private static readonly PING_RETRY_MS = 10000;
+  // Consider the connection dead once nothing has been received for this long
+  // (two to three unanswered pings).
+  private static readonly DEAD_AFTER_IDLE_MS = 45000;
+  // Reconnect backoff bounds.
+  private static readonly RECONNECT_MIN_MS = 5000;
+  private static readonly RECONNECT_MAX_MS = 60000;
+  // How long the processor gets to close the session after we log out
+  // before we close the socket ourselves.
+  private static readonly LOGOUT_GRACE_MS = 3000;
+
+  private socket: Socket | null = null;
   private status: ComState = ComState.Boot;
   private readonly crlf = '\r\n';
-  private watchdogExpiredFlag = false;
-  private pingWatchdogRef: NodeJS.Timeout | null = null;
-  private reconnectRef: NodeJS.Timeout | null = null;
   private isShuttingDown = false;
+
+  // Bytes received that do not yet form a complete line.
+  private receiveBuffer = '';
+  private lastReceivedAt = 0;
+  private lastPingAt = 0;
+  private reconnectDelayMs = NetworkEngine.RECONNECT_MIN_MS;
+
+  // Telnet sessions this bridge has opened since Homebridge started, and why
+  // the current one ended. Each child bridge keeps its own count.
+  private sessionCount = 0;
+  private sessionOpenedAt = 0;
+  private sessionCloseReason: string | null = null;
+  private sessionLastError: string | null = null;
+
+  // Timers scoped to the current connection; all cleared in teardownConnection().
+  private establishTimeoutRef: NodeJS.Timeout | null = null;
+  private monitoringRetryRef: NodeJS.Timeout | null = null;
+  private heartbeatRef: NodeJS.Timeout | null = null;
+  private monitoringRefreshRef: NodeJS.Timeout | null = null;
+  // Pending reconnect; outlives the connection that scheduled it.
+  private reconnectRef: NodeJS.Timeout | null = null;
 
   private didReceiveCallbacks: DidReceiveCallback[] = [];
   private didConnectCallbacks: DidConnectCallback[] = [];
-  private deviceUpdateCallbacks: DeviceUpdateCallback[] = [];
-  
+
   // Device monitoring
   private devicesToMonitor: MonitorDevice[] = [];
   private integrationId = 5; // Default integration ID for telnet connection
@@ -65,34 +109,65 @@ export class NetworkEngine {
 
   // Public API
   public connect(): void {
-    this.socket = new Socket();
-    this.setupBinding();
-    this.setupSocketListeners();
-
-    this.log.info('[Network] Connecting to:', this.host);
-
-    if (this.status === ComState.Boot) {
-      this.status = ComState.Connecting;
-      this.log.debug('[Network] Connecting to socket...');
-      this.socket.connect(this.port, this.host, () => {
-        this.log.debug('[Network] Socket Connected');
-        this.status = ComState.Connected;
-      });
-    } else {
+    if (this.status !== ComState.Boot) {
       this.log.error('[Network] Cannot connect, socket in invalid state');
+      return;
     }
+
+    this.sessionCount++;
+    this.sessionOpenedAt = Date.now();
+    this.sessionCloseReason = null;
+    this.sessionLastError = null;
+    this.log.info(`[Network] Session #${this.sessionCount}: connecting to ${this.host}:${this.port}`);
+
+    this.status = ComState.Connecting;
+    this.receiveBuffer = '';
+    this.lastReceivedAt = Date.now();
+
+    const socket = new Socket();
+    this.socket = socket;
+    this.setupSocketListeners(socket);
+
+    // Detect a peer that vanished without closing the connection (power loss,
+    // network drop). The application-level heartbeat below backs this up.
+    socket.setKeepAlive(true, 10000);
+    socket.setNoDelay(true);
+
+    // Whatever happens next, we must reach Ready within this window or start over.
+    this.establishTimeoutRef = setTimeout(() => {
+      this.establishTimeoutRef = null;
+      if (this.status !== ComState.Ready) {
+        this.dropConnection(`not established within ${NetworkEngine.ESTABLISH_TIMEOUT_MS / 1000}s (stuck at ${ComState[this.status]})`);
+      }
+    }, NetworkEngine.ESTABLISH_TIMEOUT_MS);
+
+    this.log.debug('[Network] Connecting to socket...');
+    socket.connect(this.port, this.host, () => {
+      this.log.debug('[Network] Socket Connected');
+      if (this.socket === socket) {
+        this.status = ComState.Connected;
+      }
+    });
   }
 
-  public send(message: string): void {
+  /**
+   * Send a command to the processor. Commands are dropped rather than queued
+   * when the connection is not ready: written to a socket that is still
+   * logging in they would be read as the username or password.
+   *
+   * @returns true if the command was written.
+   */
+  public send(message: string): boolean {
     if (this.status !== ComState.Ready) {
-      this.log.warn('[Network] Socket not ready. Will attempt sending anyway.');
+      this.log.warn(`[Network] Not connected. Dropping command: ${message}`);
+      return false;
     }
-    this.socket.write(message + this.crlf);
+    return this.write(message);
   }
 
   public addDevicesFromConfig(configDevices: unknown[]): void {
     this.log.info(`[Network] Processing ${configDevices.length} devices from config`);
-    
+
     configDevices.forEach((device, index) => {
       if (this.isValidDeviceConfig(device)) {
         this.devicesToMonitor.push({
@@ -104,14 +179,14 @@ export class NetworkEngine {
         this.log.warn(`[Network] Invalid device configuration at index ${index}: ${JSON.stringify(device)}`);
       }
     });
-    
+
     this.log.info(`[Network] Total devices configured: ${this.devicesToMonitor.length}`);
   }
 
   private isValidDeviceConfig(device: unknown): device is { integrationID: string; name: string } {
-    return typeof device === 'object' && 
-           device !== null && 
-           'integrationID' in device && 
+    return typeof device === 'object' &&
+           device !== null &&
+           'integrationID' in device &&
            'name' in device &&
            typeof (device as { integrationID: unknown }).integrationID === 'string' &&
            typeof (device as { name: unknown }).name === 'string';
@@ -156,11 +231,6 @@ export class NetworkEngine {
     this.didConnectCallbacks.push(callback);
   }
 
-  public registerDeviceUpdateCallback(callback: DeviceUpdateCallback): void {
-    this.log.debug('[Network] DeviceUpdateCallback Registered');
-    this.deviceUpdateCallbacks.push(callback);
-  }
-
   // Status getters
   public getStatus(): ComState {
     return this.status;
@@ -175,179 +245,295 @@ export class NetworkEngine {
   }
 
   // Private implementation
-  private setupBinding(): void {
-    this.socket.on('error', (err: Error) => {
-      this.log.error('[Network] Error:', err.message);
+  private write(message: string): boolean {
+    if (!this.socket || this.socket.destroyed || !this.socket.writable) {
+      this.log.warn(`[Network] Socket not writable. Dropping: ${message}`);
+      return false;
+    }
+    this.socket.write(message + this.crlf);
+    return true;
+  }
+
+  private setupSocketListeners(socket: Socket): void {
+    // Every handler ignores events from a socket that has since been replaced.
+
+    socket.on('error', (err: Error) => {
+      if (socket !== this.socket) {
+        return;
+      }
+      this.sessionLastError = err.message;
+      this.log.error(`[Network] Session #${this.sessionCount} error:`, err.message);
     });
 
-    this.socket.on('close', () => {
+    socket.on('close', () => {
+      if (socket !== this.socket) {
+        return;
+      }
+
+      this.teardownConnection();
       this.status = ComState.Disconnected;
 
-      // Clean up watchdog
-      if (this.pingWatchdogRef) {
-        clearTimeout(this.pingWatchdogRef);
-        this.pingWatchdogRef = null;
-      }
+      const reason = this.sessionCloseReason
+        ?? (this.sessionLastError ? `error: ${this.sessionLastError}` : 'closed by processor or network');
+      const durationS = Math.round((Date.now() - this.sessionOpenedAt) / 1000);
+      const message = `[Network] Session #${this.sessionCount} closed after ${durationS}s: ${reason}. `
+        + `Sessions opened by this bridge: ${this.sessionCount}`;
 
       // Homebridge is shutting us down. Do not schedule another reconnect.
       if (this.isShuttingDown) {
-        this.log.debug('[Network] Connection closed during shutdown');
+        this.log.info(message);
         return;
       }
 
-      this.log.error('[Network] Connection Lost. Reconnect attempt in 5 seconds');
+      this.log.warn(message);
 
-      this.reconnectRef = setTimeout(() => {
-        this.reconnectRef = null;
-        this.status = ComState.Boot;
-        this.connect();
-      }, 5000);
+      this.scheduleReconnect();
+    });
+
+    socket.on('data', (data: Buffer) => {
+      if (socket !== this.socket) {
+        return;
+      }
+
+      this.lastReceivedAt = Date.now();
+      this.receiveBuffer += data.toString();
+
+      this.log.debug(`[Network] Received: ${JSON.stringify(data.toString())}`);
+
+      // TCP does not preserve message boundaries: handle complete lines only
+      // and keep any trailing partial line for the next chunk.
+      const lines = this.receiveBuffer.split(/\r?\n/);
+      this.receiveBuffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        this.handleLine(line);
+      }
+
+      // The login prompts and the command prompt are not newline terminated,
+      // so they sit in the buffer as a partial line.
+      this.handlePartialLine();
+
+      // Guard against an unterminated stream growing without bound.
+      if (this.receiveBuffer.length > 4096) {
+        this.log.warn('[Network] Discarding oversized partial line');
+        this.receiveBuffer = '';
+      }
     });
   }
 
-  private setupSocketListeners(): void {
-    this.socket.on('data', (data: Buffer) => {
-      const stringData = data.toString();
-      this.watchdogExpiredFlag = false;
-      this.padTheDog();
+  private handlePartialLine(): void {
+    const partial = this.receiveBuffer;
 
-      this.log.debug(`[Network] Received: ${stringData.trim()}`);
+    if (/login:\s*$/i.test(partial)) {
+      this.receiveBuffer = '';
+      this.status = ComState.Authenticating;
+      this.log.debug('[Network] Authenticating Step 1...');
+      this.write(this.username);
+      return;
+    }
 
-      // Handle authentication sequence
-      if (stringData.includes('login:')) {
-        this.status = ComState.Authenticating;
-        this.log.debug('[Network] Authenticating Step 1...');
-        this.socket.write(this.username + this.crlf);
-        return;
-      }
+    if (/password:\s*$/i.test(partial)) {
+      this.receiveBuffer = '';
+      this.status = ComState.Authenticating;
+      this.log.debug('[Network] Authenticating Step 2...');
+      this.write(this.password);
+      return;
+    }
 
-      if (stringData.includes('password:')) {
-        this.status = ComState.Authenticating;
-        this.log.debug('[Network] Authenticating Step 2...');
-        this.socket.write(this.password + this.crlf);
-        return;
-      }
-
-      // Handle command prompt
-      if (stringData.includes('T>')) { // Prompt (QNET>)
-        if (this.status === ComState.Authenticating) {
-          this.status = ComState.Establishing;
-          this.log.debug('[Network] Requesting Monitoring Query');
-          this.socket.write('#MONITORING,5,1' + this.crlf);
-          
-          // Retry monitoring setup if no acknowledgment
-          setTimeout(() => {
-            if (this.status === ComState.Establishing) {
-              this.log.warn('[Network] Requesting Monitoring Query [Second Attempt]');
-              this.socket.write('#MONITORING,5,1' + this.crlf);
-            }
-          }, 2500);
-        }
-        return;
-      }
-
-      // Handle monitoring acknowledgment
-      if (stringData.includes(`~MONITORING,${this.integrationId},1`)) {
-        if (this.status === ComState.Establishing) {
-          this.status = ComState.Ready;
-          this.log.info('[Network] Connected & Monitoring Query Acknowledged');
-          
-          this.fireDidConnectCallbacks();
-          this.startPingWatchdog();
-          this.padTheDog();
-        }
-        return;
-      }
-
-      // Parse device updates
-      this.parseDeviceUpdates(stringData);
-      
-      // Fire general receive callbacks
-      this.fireDidReceiveCallbacks(stringData);
-    });
-  }
-
-  private parseDeviceUpdates(message: string): void {
-    try {
-      const messages = message.split('\r\n').filter(msg => msg.trim().length > 0);
-      
-      messages.forEach(msg => {
-        // Handle ~OUTPUT format (integration ID based)
-        if (msg.includes('~OUTPUT')) {
-          const parts = msg.trim().split(',');
-          if (parts.length >= 4 && parts[0] === '~OUTPUT') {
-            const deviceUpdate: DeviceUpdate = {
-              integrationId: parseInt(parts[1], 10),
-              action: parseInt(parts[2], 10),
-              value: parseFloat(parts[3]),
-              rawMessage: msg.trim(),
-            };
-
-            const device = this.devicesToMonitor.find(d => 
-              d.integrationID === deviceUpdate.integrationId.toString() ||
-              parseInt(d.integrationID, 10) === deviceUpdate.integrationId,
-            );
-
-            if (device) {
-              if (deviceUpdate.action === 1) { // Light level
-                this.log.info(`[Network] ${device.name} brightness: ${deviceUpdate.value}%`);
-              } else {
-                this.log.debug(`[Network] ${device.name} action ${deviceUpdate.action}: ${deviceUpdate.value}`);
-              }
-              this.fireDeviceUpdateCallbacks(deviceUpdate);
-            } //else {
-            //   this.log.warn(`[Network] Unknown integration ID ${deviceUpdate.integrationId}: ${msg.trim()}`);
-            // }
-          }
-        } else if (msg.includes('~DEVICE')) {
-          // Handle ~DEVICE format (system device ID based)
-          const parts = msg.trim().split(',');
-          if (parts.length >= 4 && parts[0] === '~DEVICE') {
-            const deviceUpdate: DeviceUpdate = {
-              integrationId: parseInt(parts[1], 10),
-              action: parseInt(parts[2], 10),
-              value: parseFloat(parts[3]),
-              rawMessage: msg.trim(),
-            };
-
-            this.log.debug(`[Network] System device ${deviceUpdate.integrationId} action ${deviceUpdate.action}: ${deviceUpdate.value}`);
-            this.fireDeviceUpdateCallbacks(deviceUpdate);
-          }
-        } else if (msg.includes('~ADDRESS')) {
-          // Log other interesting messages
-          this.log.debug(`[Network] ${msg.trim()}`);
-        }
-      });
-    } catch (error) {
-      this.log.error('[Network] Error parsing device update:', error);
-      this.log.debug('[Network] Raw message:', message);
+    if (PROMPT_REGEX.test(partial) && partial.replace(PROMPT_REGEX, '').length === 0) {
+      this.receiveBuffer = '';
+      this.handlePrompt();
     }
   }
 
-  // Watchdog implementation
-  private startPingWatchdog(): void {
-    const pingInterval = 20000; // 20 seconds
-    
-    const pingCheck = (): void => {
-      if (this.status === ComState.Ready && this.watchdogExpiredFlag === true) {
-        this.watchdogExpiredFlag = false;
-        this.socket.write('?SYSTEM,6' + this.crlf);
-        this.log.debug('[Network][Ping] Sent');
-      }
-      this.pingWatchdogRef = setTimeout(pingCheck, pingInterval);
-    };
+  private handleLine(rawLine: string): void {
+    const promptMatch = rawLine.match(PROMPT_REGEX);
+    const line = rawLine.replace(PROMPT_REGEX, '').trim();
 
-    this.pingWatchdogRef = setTimeout(pingCheck, pingInterval);
+    if (promptMatch) {
+      this.handlePrompt();
+    }
+
+    if (line.length === 0) {
+      return;
+    }
+
+    // A successful login is followed directly by the prompt; a failed one by
+    // another login prompt, which handlePartialLine() answers.
+    if (/^login incorrect|^bad login/i.test(line)) {
+      this.log.error('[Network] Login rejected by processor. Check username and password');
+      return;
+    }
+
+    if (line.startsWith(`~MONITORING,${this.integrationId},1`)) {
+      if (this.status === ComState.Establishing) {
+        this.onMonitoringAcknowledged();
+      }
+      return;
+    }
+
+    this.fireDidReceiveCallbacks(line);
   }
 
-  private padTheDog(): void {
-    if (this.pingWatchdogRef) {
-      clearTimeout(this.pingWatchdogRef);
+  private handlePrompt(): void {
+    if (this.status === ComState.Authenticating || this.status === ComState.Connected) {
+      this.requestMonitoring();
     }
-    
-    this.pingWatchdogRef = setTimeout(() => {
-      this.watchdogExpiredFlag = true;
-    }, 30000); // 30 seconds
+  }
+
+  private requestMonitoring(): void {
+    this.status = ComState.Establishing;
+    this.log.debug('[Network] Requesting Monitoring Query');
+    this.write(`#MONITORING,${this.integrationId},1`);
+
+    // Keep asking until it is acknowledged; the establish timeout bounds this.
+    if (this.monitoringRetryRef) {
+      clearInterval(this.monitoringRetryRef);
+    }
+    this.monitoringRetryRef = setInterval(() => {
+      if (this.status === ComState.Establishing) {
+        this.log.warn('[Network] Monitoring not acknowledged. Requesting again');
+        this.write(`#MONITORING,${this.integrationId},1`);
+      }
+    }, NetworkEngine.MONITORING_RETRY_MS);
+  }
+
+  private onMonitoringAcknowledged(): void {
+    this.status = ComState.Ready;
+    this.reconnectDelayMs = NetworkEngine.RECONNECT_MIN_MS;
+    this.log.info(`[Network] Session #${this.sessionCount}: ready (monitoring acknowledged)`);
+
+    if (this.monitoringRetryRef) {
+      clearInterval(this.monitoringRetryRef);
+      this.monitoringRetryRef = null;
+    }
+    if (this.establishTimeoutRef) {
+      clearTimeout(this.establishTimeoutRef);
+      this.establishTimeoutRef = null;
+    }
+
+    this.startHeartbeat();
+    this.scheduleMonitoringRefresh();
+    this.fireDidConnectCallbacks();
+  }
+
+  /**
+   * Any traffic from the processor counts as proof of life. After a quiet
+   * spell we ping it; if it still says nothing, the connection is dead even
+   * though TCP has not noticed, so drop it and reconnect.
+   */
+  private startHeartbeat(): void {
+    const jitteredIntervalMs = NetworkEngine.HEARTBEAT_INTERVAL_MS * (0.5 + Math.random());
+
+    this.heartbeatRef = setTimeout(() => {
+      this.heartbeatRef = null;
+      if (this.checkHeartbeat()) {
+        this.startHeartbeat();
+      }
+    }, jitteredIntervalMs);
+  }
+
+  private scheduleMonitoringRefresh(): void {
+    const jitteredMs = NetworkEngine.MONITORING_REFRESH_MS * (5 / 6 + Math.random() / 3);
+
+    this.monitoringRefreshRef = setTimeout(() => {
+      this.monitoringRefreshRef = null;
+      if (this.status !== ComState.Ready) {
+        return;
+      }
+      this.log.debug(`[Network] Session #${this.sessionCount}: refreshing monitoring`);
+      this.write(`#MONITORING,${this.integrationId},1`);
+      this.scheduleMonitoringRefresh();
+    }, jitteredMs);
+  }
+
+  /**
+   * @returns false if the connection was found dead and is being dropped.
+   */
+  private checkHeartbeat(): boolean {
+    const now = Date.now();
+    const sinceReceivedMs = now - this.lastReceivedAt;
+
+    // Only what we receive proves the processor is alive; having sent
+    // something proves nothing, so sending never postpones the ping.
+    if (sinceReceivedMs >= NetworkEngine.DEAD_AFTER_IDLE_MS) {
+      this.dropConnection(`no response from processor in ${Math.round(sinceReceivedMs / 1000)}s`);
+      return false;
+    }
+
+    if (sinceReceivedMs >= NetworkEngine.PING_AFTER_IDLE_MS && now - this.lastPingAt >= NetworkEngine.PING_RETRY_MS) {
+      this.lastPingAt = now;
+      this.log.debug('[Network][Ping] Sent');
+      this.write('?SYSTEM,6');
+    }
+
+    return true;
+  }
+
+  private scheduleReconnect(): void {
+    const delayMs = this.reconnectDelayMs;
+    this.reconnectDelayMs = Math.min(this.reconnectDelayMs * 2, NetworkEngine.RECONNECT_MAX_MS);
+
+    this.log.warn(`[Network] Reconnecting in ${delayMs / 1000}s as session #${this.sessionCount + 1}`);
+
+    if (this.reconnectRef) {
+      clearTimeout(this.reconnectRef);
+    }
+    this.reconnectRef = setTimeout(() => {
+      this.reconnectRef = null;
+      this.status = ComState.Boot;
+      this.connect();
+    }, delayMs);
+  }
+
+  /**
+   * Close the current session on purpose, recording why for the close log.
+   * The 'close' handler then cleans up and schedules the reconnect.
+   */
+  private dropConnection(reason: string): void {
+    this.log.error(`[Network] Session #${this.sessionCount}: dropping connection, ${reason}`);
+    this.sessionCloseReason = reason;
+    this.closeSocket();
+  }
+
+  /**
+   * Close the current socket, logging out first if we are logged in so the
+   * processor frees the session immediately rather than whenever it notices
+   * the TCP close. A processor that never answers cannot hold us up: the
+   * socket is destroyed after a short grace period regardless.
+   */
+  private closeSocket(): void {
+    const socket = this.socket;
+    if (!socket || socket.destroyed) {
+      return;
+    }
+
+    // Before login completes, 'logout' would be read as a username or password.
+    const loggedIn = this.status === ComState.Establishing || this.status === ComState.Ready;
+
+    if (!loggedIn || !socket.writable) {
+      socket.destroy();
+      return;
+    }
+
+    this.log.debug(`[Network] Session #${this.sessionCount}: logging out`);
+    socket.end('logout' + this.crlf);
+
+    // Never hold Homebridge open on our account.
+    setTimeout(() => socket.destroy(), NetworkEngine.LOGOUT_GRACE_MS).unref();
+  }
+
+  private teardownConnection(): void {
+    for (const ref of [this.establishTimeoutRef, this.monitoringRetryRef, this.heartbeatRef, this.monitoringRefreshRef]) {
+      if (ref) {
+        clearTimeout(ref);
+      }
+    }
+    this.establishTimeoutRef = null;
+    this.monitoringRetryRef = null;
+    this.heartbeatRef = null;
+    this.monitoringRefreshRef = null;
+    this.receiveBuffer = '';
   }
 
   // Callback firing
@@ -372,36 +558,23 @@ export class NetworkEngine {
     }
   }
 
-  private fireDeviceUpdateCallbacks(deviceUpdate: DeviceUpdate): void {
-    for (const callback of this.deviceUpdateCallbacks) {
-      try {
-        callback(this, deviceUpdate);
-      } catch (error) {
-        this.log.error('[Network] Error in device update callback:', error);
-      }
-    }
-  }
-
   // Cleanup
   public disconnect(): void {
     this.log.info('[Network] Disconnecting...');
 
     this.isShuttingDown = true;
-
-    if (this.pingWatchdogRef) {
-      clearTimeout(this.pingWatchdogRef);
-      this.pingWatchdogRef = null;
-    }
+    this.teardownConnection();
 
     if (this.reconnectRef) {
       clearTimeout(this.reconnectRef);
       this.reconnectRef = null;
     }
 
-    this.status = ComState.Disconnected;
-
     if (this.socket) {
-      this.socket.destroy();
+      this.sessionCloseReason = 'Homebridge shutdown';
+      this.closeSocket();
     }
+
+    this.status = ComState.Disconnected;
   }
 }

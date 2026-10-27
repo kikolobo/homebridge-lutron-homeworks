@@ -30,6 +30,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
   private readonly engine: NetworkEngine;
   private readonly cachedPlatformAccessories: PlatformAccessory[] = [];
   private readonly homeworksAccessories: HomeworksAccessory[] = [];
+  private queryTimeoutRefs: NodeJS.Timeout[] = [];
 
   constructor(
     public readonly log: Logger,
@@ -61,6 +62,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
 
     this.api.on('shutdown', () => {
       this.log.debug('[Platform] shutdown:');
+      this.queryTimeoutRefs.forEach(ref => clearTimeout(ref));
       this.engine.disconnect();
     });
   }
@@ -258,14 +260,23 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
 
   private handleConnectionEstablished(): void {
     this.log.info('[Platform] Connection established, querying device states');
-    
+    this.queryAllDevices();
+  }
+
+  private queryAllDevices(): void {
+    // Cancel a round still in progress (e.g. from a connection that dropped)
+    // so queries never pile up.
+    this.queryTimeoutRefs.forEach(ref => clearTimeout(ref));
+
     // Query all devices with staggered timing
-    this.homeworksAccessories.forEach((accessory, index) => {
-      setTimeout(() => {
+    this.queryTimeoutRefs = this.homeworksAccessories.map((accessory, index) => {
+      const ref = setTimeout(() => {
         const command = `?OUTPUT,${accessory.getIntegrationId()}`;
         this.log.debug(`[Platform] Querying: ${accessory.getName()}`);
         this.engine.send(command);
       }, index * 100); // 100ms between queries
+      ref.unref();
+      return ref;
     });
   }
 
@@ -297,7 +308,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
       value: number, 
       isDimmable: boolean, 
       accessory: HomeworksAccessory,
-    ): void => {
+    ): boolean => {
       const fadeTime = isDimmable ? '00:01' : '00:00';
       const command = `#OUTPUT,${accessory.getIntegrationId()},1,${value},${fadeTime}`;
 
@@ -305,11 +316,14 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
       // #OUTPUT,204,1,26,00:01
       //Unrecognized OUTPUT format: ~OUTPUT,204,30,1,29.00
 
-      // Update local state immediately for better responsiveness
-      accessory.updateBrightness(value);
+      // Only reflect the new level locally once it has actually gone out;
+      // otherwise HomeKit would show a change the processor never received.
+      if (!this.engine.send(command)) {
+        return false;
+      }
 
-      // this.log.debug(`[Platform][createBrightnessChangeCallback] ${accessory.getName()} to ${value}%`);
-      this.engine.send(command);
+      accessory.updateBrightness(value);
+      return true;
     };
   }
 
@@ -384,7 +398,7 @@ export class HomeworksPlatform implements DynamicPlatformPlugin {
       value: number,
       isDimmable: boolean,
       accessory: HomeworksAccessory,
-    ) => void,
+    ) => boolean,
   ): void {
     const isDimmable = deviceConfig.isDimmable !== false;
 

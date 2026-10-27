@@ -3,7 +3,8 @@ import { HomeworksPlatform } from './platform';
 import { ConfigDevice } from './Schemas/device';
 
 interface SetLutronLevelCallback { 
-  (value: number, isDimmable: boolean, accessory: HomeworksAccessory): void;
+  // Returns false if the command could not be sent to the processor.
+  (value: number, isDimmable: boolean, accessory: HomeworksAccessory): boolean;
 }
 
 /**
@@ -43,6 +44,25 @@ export class HomeworksAccessory {
       .setCharacteristic(this._platform.Characteristic.Manufacturer, 'Homebridge')
       .setCharacteristic(this._platform.Characteristic.Model, 'Homeworks Plugin')
       .setCharacteristic(this._platform.Characteristic.SerialNumber, 'n/a');
+  }
+
+  /**
+   * Send a level to the processor. Returns false if it could not be sent.
+   */
+  protected sendLevel(level: number, isDimmable: boolean): boolean {
+    if (!this.lutronLevelChangeCallback) {
+      return true;
+    }
+    return this.lutronLevelChangeCallback(level, isDimmable, this);
+  }
+
+  /**
+   * Error to hand HomeKit when the processor is unreachable, so the Home app
+   * shows "No Response" instead of a change that never happened.
+   */
+  protected communicationFailure(): Error {
+    this._platform.log.warn('[Accessory][%s] Processor not connected. Command not sent', this._name);
+    return new this._platform.api.hap.HapStatusError(this._platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
   }
 
   /**
@@ -152,18 +172,19 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
    */
   private setOn(targetValue: CharacteristicValue, callback: CharacteristicSetCallback): void {
     const isDimmable = this.getIsDimmable();
+    const previousState = { ...this._dimmerState };
 
-    if (targetValue === this._dimmerState.On) {
-      callback(null);
-      return;
-    }
-
+    // Always send, even if we believe the light is already in this state: if
+    // our state has drifted from the processor, skipping would swallow the
+    // command and leave the light stuck.
     this._dimmerState.On = targetValue as boolean;
 
     if (targetValue === true) {
-      // Turning ON - restore last known brightness
-      this._dimmerState.Brightness = this._lastKnownBrightness;
-      this._platform.log.debug('[Accessory][%s][setOn] Restoring brightness to %i', this._name, this._lastKnownBrightness);
+      // Turning ON - keep the current level if already on, else restore the last known one
+      if (!(previousState.On && previousState.Brightness > 0)) {
+        this._dimmerState.Brightness = this._lastKnownBrightness;
+      }
+      this._platform.log.debug('[Accessory][%s][setOn] Restoring brightness to %i', this._name, this._dimmerState.Brightness);
       
       // Update HomeKit characteristic to reflect the restored brightness
       if (this.getIsDimmable()) {
@@ -177,8 +198,10 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
       this._dimmerState.Brightness = 0;
     }
 
-    if (this.lutronLevelChangeCallback) {
-      this.lutronLevelChangeCallback(this._dimmerState.Brightness, isDimmable, this);
+    if (!this.sendLevel(this._dimmerState.Brightness, isDimmable)) {
+      this._dimmerState = previousState;
+      callback(this.communicationFailure());
+      return;
     }
 
     this._platform.log.debug('[Accessory][%s][setOn] [state: %s|dim: %s|brightness: %i]', 
@@ -213,10 +236,7 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
    * Handle the "SET" Brightness requests from HomeKit
    */
   private setBrightness(targetValue: CharacteristicValue, callback: CharacteristicSetCallback): void {
-    if (targetValue === this._dimmerState.Brightness) {
-      callback(null);
-      return;
-    }
+    const previousState = { ...this._dimmerState };
 
     this._platform.log.debug('[Accessory][%s][setBrightness] -> %i', this.getName(), targetValue);
 
@@ -230,8 +250,10 @@ export class HomeworksLightAccessory extends HomeworksAccessory {
     // Update the On state based on brightness
     this._dimmerState.On = targetBrightnessVal > 0;
 
-    if (this.lutronLevelChangeCallback) {
-      this.lutronLevelChangeCallback(targetBrightnessVal, this.getIsDimmable(), this);
+    if (!this.sendLevel(targetBrightnessVal, this.getIsDimmable())) {
+      this._dimmerState = previousState;
+      callback(this.communicationFailure());
+      return;
     }
 
     callback(null); // null or error
@@ -355,18 +377,23 @@ export class HomeworksShadeAccessory extends HomeworksAccessory {
     this._platform.log.info('[Accessory][%s][setTargetPosition] -> %i', this.getName(), targetPosition);
 
     const targetPositionNumber = targetPosition as number;
-    if (targetPositionNumber === this._shadeState.TargetPosition) {
-      callback(null);
-      return;
-    }
 
     // Begin motion to the target level. We only set the target level and let reported status
-    // set the current position
+    // set the current position. No motion to report if we are already there.
+    // This must precede sending: the send echoes the level back through
+    // updateBrightness(), which has to see the move as in flight.
     this._shadeState.TargetPosition = targetPositionNumber;
-    this.beginMotion();
+    if (targetPositionNumber !== this._shadeState.Position) {
+      this.beginMotion();
+    }
 
-    if (this.lutronLevelChangeCallback) {
-      this.lutronLevelChangeCallback(this._shadeState.TargetPosition, false, this);
+    // Always send, even if the target looks unchanged, so a shade whose state
+    // drifted from the processor still moves.
+    if (!this.sendLevel(targetPositionNumber, false)) {
+      // Nothing moved: settle back on the current position.
+      this.stopped();
+      callback(this.communicationFailure());
+      return;
     }
 
     callback(null); // null or error
